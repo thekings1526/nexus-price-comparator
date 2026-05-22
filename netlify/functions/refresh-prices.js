@@ -277,15 +277,16 @@ async function findCompetitorProduct(competitor, ownProduct) {
   const links = Array.from(linksByUrl.values());
   const ranked = links
     .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct) }))
-    .filter((link) => link.score > 4)
+    .filter((link) => link.score >= 7)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 4);
+    .slice(0, 6);
 
   for (const candidate of ranked) {
     try {
       const productPage = await fetchProduct(candidate.url);
       const product = parseProductPage(productPage.html, productPage.url);
-      if (scoreCandidate({ text: product.title, url: product.url }, ownProduct) > 4) {
+      const score = scoreCandidate(product, ownProduct);
+      if (score >= 16) {
         return product;
       }
     } catch {
@@ -345,6 +346,7 @@ function parseProductPage(html, url) {
   const text = htmlToLines(html);
   const title = cleanText(match(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i) || text.find((line) => line.length > 8) || "");
   const image = extractImage(html, url);
+  const description = extractDescription(html, text);
   const platform = inferPlatform(title) || inferPlatform(text.slice(0, 120).join(" "));
   const variants = parseStructuredVariants(html) || parseVariants(text);
 
@@ -352,6 +354,7 @@ function parseProductPage(html, url) {
     title,
     url,
     image,
+    description,
     platform,
     licenses: variants
   };
@@ -512,18 +515,21 @@ function isLikelyProductUrl(url, baseUrl, text) {
 }
 
 function scoreCandidate(candidate, ownProduct) {
-  const candidateText = normalize(`${candidate.text || ""} ${candidate.url || ""}`);
+  const candidateText = normalize(`${candidate.text || ""} ${candidate.title || ""} ${candidate.description || ""} ${candidate.url || ""}`);
   if (isRental(candidateText)) return 0;
   const ownPlatform = normalize(ownProduct.platform || "");
   const candidatePlatforms = platformsIn(candidateText);
   if (ownPlatform && candidatePlatforms.size && !candidatePlatforms.has(ownPlatform)) return 0;
 
-  const ownTokens = gameTokens(ownProduct.title);
+  const ownTokens = gameTokens(`${ownProduct.title || ""} ${ownProduct.description || ""}`);
   const candidateTokens = new Set(gameTokens(candidateText));
-  const ownNumbers = ownTokens.filter((token) => /^\d+$/.test(token));
+  const ownTitleTokens = gameTokens(ownProduct.title);
+  const candidateTitleTokens = new Set(gameTokens(`${candidate.text || ""} ${candidate.title || ""}`));
+  const ownNumbers = ownTitleTokens.filter((token) => /^\d+$/.test(token));
   if (ownNumbers.some((token) => !candidateTokens.has(token))) return 0;
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
+  if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
 
   let tokenScore = 0;
   let meaningfulMatches = 0;
@@ -532,12 +538,50 @@ function scoreCandidate(candidate, ownProduct) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  if (!meaningfulMatches || tokenScore < 2) return 0;
+  if (!meaningfulMatches || tokenScore < 6) return 0;
 
   let score = tokenScore;
+  score += titleCoverageScore(ownTitleTokens, candidateTitleTokens);
+  score += editionCompatibilityScore(ownTokens, candidateTokens);
   if (ownPlatform && candidatePlatforms.has(ownPlatform)) score += 5;
-  if (/ultimate|toty|deluxe/.test(candidateText) && !/ultimate|toty|deluxe/i.test(ownProduct.title)) score -= 5;
+  if (imageLooksRelated(ownProduct.image, candidate.image)) score += 3;
+  if (candidate.description && titleCoverageAccepted(ownTitleTokens, new Set(gameTokens(candidate.description)))) score += 2;
   return score;
+}
+
+function titleCoverageAccepted(ownTokens, candidateTokens) {
+  return titleCoverageScore(ownTokens, candidateTokens) >= 8;
+}
+
+function titleCoverageScore(ownTokens, candidateTokens) {
+  const distinctOwn = uniqueBy(ownTokens, (token) => token)
+    .filter((token) => !LOOSE_TITLE_TOKENS.has(token));
+  if (!distinctOwn.length) return 0;
+  const matches = distinctOwn.filter((token) => candidateTokens.has(token));
+  const coverage = matches.length / distinctOwn.length;
+  if (distinctOwn.length <= 2) return coverage === 1 ? 12 : 0;
+  if (distinctOwn.length <= 4) return coverage >= 0.75 ? Math.round(12 * coverage) : 0;
+  return coverage >= 0.68 ? Math.round(12 * coverage) : 0;
+}
+
+function editionCompatibilityScore(ownTokens, candidateTokens) {
+  const ownEditions = ownTokens.filter((token) => EDITION_TOKENS.has(token));
+  const candidateEditions = Array.from(candidateTokens).filter((token) => EDITION_TOKENS.has(token));
+  let score = 0;
+  for (const token of ownEditions) {
+    score += candidateTokens.has(token) ? 2 : -3;
+  }
+  const extraCandidate = candidateEditions.filter((token) => !ownTokens.includes(token) && token !== "standard");
+  score -= extraCandidate.length * 4;
+  return score;
+}
+
+function imageLooksRelated(ownImage, candidateImage) {
+  if (!ownImage || !candidateImage) return false;
+  const own = imageKey(ownImage);
+  const candidate = imageKey(candidateImage);
+  if (!own || !candidate) return false;
+  return own === candidate || own.split("-").some((part) => part.length >= 6 && candidate.includes(part));
 }
 
 function buildSearchQueries(product) {
@@ -603,6 +647,13 @@ function extractImage(html, url) {
   const image = match(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
     || match(html, /<img[^>]+src=["']([^"']+)["'][^>]*>/i);
   return image ? toAbsoluteUrl(image, url) : "";
+}
+
+function extractDescription(html, lines) {
+  const meta = match(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)
+    || match(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+  if (meta) return cleanText(meta).slice(0, 500);
+  return lines.slice(0, 80).join(" ").slice(0, 500);
 }
 
 function inferPlatform(value) {
@@ -687,6 +738,15 @@ function slugify(value) {
   return normalize(value).replace(/\s+/g, "-").slice(0, 80);
 }
 
+function imageKey(value) {
+  try {
+    const parsed = new URL(value);
+    return normalize(parsed.pathname.split("/").pop() || "").replace(/\s+/g, "-");
+  } catch {
+    return "";
+  }
+}
+
 function toAbsoluteUrl(href, baseUrl) {
   try {
     const url = new URL(href, baseUrl);
@@ -741,10 +801,46 @@ const STOP_WORDS = new Set([
   "fifa",
   "jogo",
   "games",
+  "game",
   "for",
   "the",
   "of",
-  "and"
+  "and",
+  "ea",
+  "sports",
+  "edition",
+  "edicao",
+  "versao",
+  "psn"
+]);
+
+const LOOSE_TITLE_TOKENS = new Set([
+  "remaster",
+  "remastered",
+  "edition",
+  "edicao",
+  "standard",
+  "midia",
+  "digital"
+]);
+
+const EDITION_TOKENS = new Set([
+  "gold",
+  "ultimate",
+  "deluxe",
+  "complete",
+  "collection",
+  "colecao",
+  "trilogy",
+  "bundle",
+  "legendary",
+  "definitive",
+  "remake",
+  "remaster",
+  "remastered",
+  "champions",
+  "premium",
+  "standard"
 ]);
 
 module.exports.buildReport = buildReport;
