@@ -17,7 +17,7 @@ Nao vamos levar o site todo para outro lugar. A arquitetura escolhida e hibrida:
 
 ## Por que separar
 
-O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode consultar 4 concorrentes e validar paginas de produto. Isso e pesado demais para depender de uma aba aberta ou de uma funcao curta na Netlify.
+O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender de uma aba aberta ou de uma funcao curta na Netlify.
 
 ## Estado atual
 
@@ -32,7 +32,8 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - Render cron ID: `crn-d87t66n7f7vs73dqjnpg`
 - Agenda configurada como `0 8 1 1 *` para nao rodar todo dia sozinho. O uso normal sera manual pelo painel.
 - Em 22/05/2026, a coleta falhou com `HTTP 403` em produto da Nexus. Produto abria normal fora do worker, entao a causa provavel e bloqueio por ritmo/volume de requisicoes.
-- Ajuste feito: worker conservador com `WORKER_BATCH_SIZE=1`, `WORKER_REQUEST_DELAY_MS=1200` e `WORKER_ITEM_RETRIES=1`.
+- Ajuste feito: worker indexa primeiro os sitemaps de produtos dos concorrentes, compara em memoria e so abre as paginas candidatas mais provaveis.
+- Config atual sugerida: `WORKER_REQUEST_DELAY_MS=250`, `WORKER_SAVE_EVERY=5`, `CATALOG_CANDIDATE_LIMIT=8` e `WORKER_ITEM_RETRIES=1`.
 - Regra atual: nao pular produto. Se um produto travar, a coleta para e mostra o item para investigarmos a raiz.
 - A base foi reiniciada depois de suspender/retomar o Render; coleta limpa recomecou do item 1.
 - Regra de comparacao atual: o nome do jogo e a plataforma continuam sendo os sinais mais fortes. Imagem, descricao e edicao entram como reforco de confianca, mas nao sao exigidas como match perfeito para nao perder produtos validos.
@@ -47,6 +48,9 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - A comparacao de edicao agora olha o titulo, nao a descricao. Isso evita ler termos como `Ultimate Team` da descricao do FC como se o produto fosse `Ultimate Edition`.
 - Anos abreviados e completos agora sao equivalentes em titulos de temporada, por exemplo `FIFA 23` com `FIFA 2023` e `PES 2020` com `PES 20`.
 - Essa equivalencia de ano tambem vale na triagem inicial dos links de busca, nao apenas na validacao final da pagina.
+- A coleta nova nao faz mais busca nos concorrentes para cada jogo por padrao. Ela usa os sitemaps `sitemap/product-*.xml` como indice de URLs, ranqueia candidatos pelo nome/URL e valida abrindo a pagina final.
+- Franquias com subtitulo sensivel, como `Call of Duty`, exigem que o subtitulo principal bata. Isso evita comparar `Modern Warfare` com `Infinite Warfare`.
+- Edicoes fortes no titulo do concorrente, como `Remastered`, `Ultimate`, `Deluxe` e `Gold`, bloqueiam o match quando a Nexus nao traz essa edicao no titulo.
 
 ## Arquivos principais
 
@@ -68,8 +72,10 @@ Nao salvar token real no repositorio.
 - `NEXUS_BLOBS_SITE_ID`
 - `NEXUS_BLOBS_TOKEN`
 - `WORKER_BATCH_SIZE=1`
-- `WORKER_REQUEST_DELAY_MS=1200`
+- `WORKER_REQUEST_DELAY_MS=250`
 - `WORKER_ITEM_RETRIES=1`
+- `WORKER_SAVE_EVERY=5`
+- `CATALOG_CANDIDATE_LIMIT=8`
 
 ## Render Cron Job sugerido
 
@@ -81,8 +87,8 @@ O Render usa UTC. Essa agenda deixa o cron praticamente parado; o uso normal e d
 
 ## Proximos passos
 
-1. Publicar a regra nova de comparacao no GitHub/Render.
-2. Reiniciar a coleta para gerar um relatorio limpo com a regra nova.
+1. Publicar o worker com indice de sitemaps no GitHub/Render.
+2. Reiniciar a coleta para gerar um relatorio limpo com o fluxo novo.
 3. Conferir no painel da Netlify se o status chega no total encontrado do catalogo.
 4. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
 
