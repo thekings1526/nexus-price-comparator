@@ -35,6 +35,8 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - Ajuste feito: worker conservador com `WORKER_BATCH_SIZE=1`, `WORKER_REQUEST_DELAY_MS=1200` e `WORKER_ITEM_RETRIES=1`.
 - Regra atual: nao pular produto. Se um produto travar, a coleta para e mostra o item para investigarmos a raiz.
 - A base foi reiniciada depois de suspender/retomar o Render; coleta limpa recomecou do item 1.
+- Regra de comparacao atual: o nome do jogo e a plataforma continuam sendo os sinais mais fortes. Imagem, descricao e edicao entram como reforco de confianca, mas nao sao exigidas como match perfeito para nao perder produtos validos.
+- A regra de numeros obrigatorios usa apenas numeros do titulo do produto, evitando que numeros comuns da descricao bloqueiem comparacoes boas.
 
 ## Arquivos principais
 
@@ -55,23 +57,24 @@ Nao salvar token real no repositorio.
 
 - `NEXUS_BLOBS_SITE_ID`
 - `NEXUS_BLOBS_TOKEN`
-- `WORKER_BATCH_SIZE=4`
+- `WORKER_BATCH_SIZE=1`
+- `WORKER_REQUEST_DELAY_MS=1200`
+- `WORKER_ITEM_RETRIES=1`
 
 ## Render Cron Job sugerido
 
 - Build command: `npm install`
 - Start command: `npm run worker:refresh`
-- Schedule: `0 8 * * *`
+- Schedule: `0 8 1 1 *`
 
-O Render usa UTC. Esse horario roda por volta de 05:00 no horario de Brasilia.
+O Render usa UTC. Essa agenda deixa o cron praticamente parado; o uso normal e disparar manualmente pelo painel.
 
 ## Proximos passos
 
-1. Subir este projeto para um repositorio GitHub.
-2. Configurar env vars na Netlify para disparar o Render pelo painel.
-3. Rodar a primeira coleta.
-4. Conferir no painel da Netlify se o status chega em `1039 de 1039`.
-5. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
+1. Publicar a regra nova de comparacao no GitHub/Render.
+2. Reiniciar a coleta para gerar um relatorio limpo com a regra nova.
+3. Conferir no painel da Netlify se o status chega no total encontrado do catalogo.
+4. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
 
 ## Observacoes importantes
 
