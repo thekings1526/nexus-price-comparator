@@ -8,6 +8,7 @@ const {
 } = require("../netlify/functions/refresh-prices");
 
 const BATCH_SIZE = Math.max(Number(process.env.WORKER_BATCH_SIZE) || 4, 1);
+const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 5, 1);
 const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item) => item.id).join(","))
   .split(",")
   .map((item) => item.trim())
@@ -38,18 +39,7 @@ async function main() {
   const startOffset = Math.min(merged.items?.length || 0, catalogItems.length);
 
   for (let offset = startOffset; offset < catalogItems.length; offset += BATCH_SIZE) {
-    let batch;
-    try {
-      batch = await buildReport({
-        competitors: COMPETITOR_IDS,
-        items: catalogItems,
-        limit: "all",
-        offset,
-        batchSize: BATCH_SIZE
-      });
-    } catch (error) {
-      batch = await recoverBatch(catalogItems, offset, startedAt, error);
-    }
+    const batch = await buildReportWithRetry(catalogItems, offset, startedAt);
 
     merged = mergeReports(merged, batch);
     await saveReportWithStatus(merged, {
@@ -86,32 +76,40 @@ function shouldResume(previous, totalItems) {
     && previous.items.length < totalItems;
 }
 
+async function buildReportWithRetry(catalogItems, offset, startedAt) {
+  let lastError;
+  for (let attempt = 1; attempt <= ITEM_RETRIES; attempt += 1) {
+    try {
+      return await buildReport({
+        competitors: COMPETITOR_IDS,
+        items: catalogItems,
+        limit: "all",
+        offset,
+        batchSize: BATCH_SIZE
+      });
+    } catch (error) {
+      lastError = error;
+      await saveReportWithStatus(await baseReport(), {
+        status: "running",
+        startedAt,
+        offset,
+        batchSize: BATCH_SIZE,
+        totalItems: catalogItems.length,
+        message: `Tentativa ${attempt}/${ITEM_RETRIES} falhou no lote ${offset + 1}`
+      }).catch(() => null);
+      await sleep(retryDelay(attempt));
+    }
+  }
+  return recoverBatch(catalogItems, offset, startedAt, lastError);
+}
+
 async function recoverBatch(catalogItems, offset, startedAt, batchError) {
   console.warn(`Lote ${offset} falhou: ${batchError.message || batchError}`);
   const items = [];
   const end = Math.min(offset + BATCH_SIZE, catalogItems.length);
   for (let index = offset; index < end; index += 1) {
-    try {
-      const itemReport = await buildReport({
-        competitors: COMPETITOR_IDS,
-        items: catalogItems,
-        limit: "all",
-        offset: index,
-        batchSize: 1
-      });
-      items.push(...(itemReport.items || []));
-    } catch (error) {
-      const skipped = catalogItems[index];
-      console.warn(`Produto ignorado ${index + 1}/${catalogItems.length}: ${skipped?.text || skipped?.url || "sem nome"} - ${error.message || error}`);
-      await saveReportWithStatus(await baseReport(), {
-        status: "running",
-        startedAt,
-        offset: index + 1,
-        batchSize: BATCH_SIZE,
-        totalItems: catalogItems.length,
-        message: `Produto ignorado: ${skipped?.text || skipped?.url || "sem nome"}`
-      }).catch(() => null);
-    }
+    const itemReport = await buildSingleItemWithRetry(catalogItems, index, startedAt);
+    items.push(...(itemReport.items || []));
   }
   return {
     schemaVersion: 4,
@@ -123,6 +121,43 @@ async function recoverBatch(catalogItems, offset, startedAt, batchError) {
     batchSize: BATCH_SIZE,
     items
   };
+}
+
+async function buildSingleItemWithRetry(catalogItems, index, startedAt) {
+  const tracked = catalogItems[index];
+  let lastError;
+  for (let attempt = 1; attempt <= ITEM_RETRIES; attempt += 1) {
+    try {
+      return await buildReport({
+        competitors: COMPETITOR_IDS,
+        items: catalogItems,
+        limit: "all",
+        offset: index,
+        batchSize: 1
+      });
+    } catch (error) {
+      lastError = error;
+      await saveReportWithStatus(await baseReport(), {
+        status: "running",
+        startedAt,
+        offset: index + 1,
+        batchSize: BATCH_SIZE,
+        totalItems: catalogItems.length,
+        message: `Tentando novamente: ${tracked?.text || tracked?.url || "produto sem nome"} (${attempt}/${ITEM_RETRIES})`
+      }).catch(() => null);
+      await sleep(retryDelay(attempt));
+    }
+  }
+  const label = tracked?.text || tracked?.url || "produto sem nome";
+  throw new Error(`Nao consegui processar ${label} depois de ${ITEM_RETRIES} tentativas: ${lastError?.message || lastError}`);
+}
+
+function retryDelay(attempt) {
+  return Math.min(90000, 8000 * attempt);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function baseReport() {
