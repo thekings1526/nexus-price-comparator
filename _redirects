@@ -1,0 +1,4 @@
+/api/refresh-prices /.netlify/functions/refresh-prices 200
+/api/report /.netlify/functions/price-report 200
+/api/refresh-all /.netlify/functions/refresh-catalog-background 200
+/api/refresh-batch /.netlify/functions/refresh-batch 200
