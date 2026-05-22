@@ -1,0 +1,15 @@
+services:
+  - type: cron
+    name: nexus-price-worker
+    runtime: node
+    plan: starter
+    schedule: "0 8 * * *"
+    buildCommand: "npm install"
+    startCommand: "npm run worker:refresh"
+    envVars:
+      - key: NEXUS_BLOBS_SITE_ID
+        sync: false
+      - key: NEXUS_BLOBS_TOKEN
+        sync: false
+      - key: WORKER_BATCH_SIZE
+        value: "4"
