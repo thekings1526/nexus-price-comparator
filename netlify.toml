@@ -13,3 +13,8 @@
   from = "/api/refresh-prices"
   to = "/.netlify/functions/refresh-prices"
   status = 200
+
+[[redirects]]
+  from = "/api/trigger-refresh"
+  to = "/.netlify/functions/trigger-render-refresh"
+  status = 200
