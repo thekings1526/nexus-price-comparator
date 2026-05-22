@@ -524,7 +524,8 @@ function scoreCandidate(candidate, ownProduct) {
   const ownTokens = gameTokens(`${ownProduct.title || ""} ${ownProduct.description || ""}`);
   const candidateTokens = new Set(gameTokens(candidateText));
   const ownTitleTokens = gameTokens(ownProduct.title);
-  const candidateTitleTokens = new Set(gameTokens(`${candidate.text || ""} ${candidate.title || ""}`));
+  const candidateTitleSource = cleanText(`${candidate.text || ""} ${candidate.title || ""}`) || candidate.url || "";
+  const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
   const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
   const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
   if (Array.from(ownTitleNumbers).some((token) => !candidateTitleNumbers.has(token) && !candidateTokens.has(token))) return 0;
