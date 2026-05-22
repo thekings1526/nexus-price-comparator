@@ -7,8 +7,8 @@ const {
   COMPETITORS
 } = require("../netlify/functions/refresh-prices");
 
-const BATCH_SIZE = Math.max(Number(process.env.WORKER_BATCH_SIZE) || 4, 1);
-const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 5, 1);
+const BATCH_SIZE = Math.max(Number(process.env.WORKER_BATCH_SIZE) || 1, 1);
+const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 1, 1);
 const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item) => item.id).join(","))
   .split(",")
   .map((item) => item.trim())
@@ -100,56 +100,9 @@ async function buildReportWithRetry(catalogItems, offset, startedAt) {
       await sleep(retryDelay(attempt));
     }
   }
-  return recoverBatch(catalogItems, offset, startedAt, lastError);
-}
-
-async function recoverBatch(catalogItems, offset, startedAt, batchError) {
-  console.warn(`Lote ${offset} falhou: ${batchError.message || batchError}`);
-  const items = [];
-  const end = Math.min(offset + BATCH_SIZE, catalogItems.length);
-  for (let index = offset; index < end; index += 1) {
-    const itemReport = await buildSingleItemWithRetry(catalogItems, index, startedAt);
-    items.push(...(itemReport.items || []));
-  }
-  return {
-    schemaVersion: 4,
-    generatedAt: new Date().toISOString(),
-    source: "worker",
-    competitors: COMPETITORS.filter((item) => COMPETITOR_IDS.includes(item.id)),
-    totalItems: catalogItems.length,
-    offset,
-    batchSize: BATCH_SIZE,
-    items
-  };
-}
-
-async function buildSingleItemWithRetry(catalogItems, index, startedAt) {
-  const tracked = catalogItems[index];
-  let lastError;
-  for (let attempt = 1; attempt <= ITEM_RETRIES; attempt += 1) {
-    try {
-      return await buildReport({
-        competitors: COMPETITOR_IDS,
-        items: catalogItems,
-        limit: "all",
-        offset: index,
-        batchSize: 1
-      });
-    } catch (error) {
-      lastError = error;
-      await saveReportWithStatus(await baseReport(), {
-        status: "running",
-        startedAt,
-        offset: index + 1,
-        batchSize: BATCH_SIZE,
-        totalItems: catalogItems.length,
-        message: `Tentando novamente: ${tracked?.text || tracked?.url || "produto sem nome"} (${attempt}/${ITEM_RETRIES})`
-      }).catch(() => null);
-      await sleep(retryDelay(attempt));
-    }
-  }
-  const label = tracked?.text || tracked?.url || "produto sem nome";
-  throw new Error(`Nao consegui processar ${label} depois de ${ITEM_RETRIES} tentativas: ${lastError?.message || lastError}`);
+  const tracked = catalogItems[offset];
+  const label = tracked?.text || tracked?.url || `item ${offset + 1}`;
+  throw new Error(`Coleta parada no produto ${offset + 1}/${catalogItems.length}: ${label}. Causa: ${lastError?.message || lastError}`);
 }
 
 function retryDelay(attempt) {
