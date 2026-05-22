@@ -38,6 +38,7 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - Regra de comparacao atual: o nome do jogo e a plataforma continuam sendo os sinais mais fortes. Imagem, descricao e edicao entram como reforco de confianca, mas nao sao exigidas como match perfeito para nao perder produtos validos.
 - A regra de numeros obrigatorios usa apenas numeros do titulo do produto, evitando que numeros comuns da descricao bloqueiem comparacoes boas.
 - Numeros de sequencia no titulo do concorrente agora tambem sao tratados com mais cuidado. Se a Nexus tem `Modern Warfare` sem numero, o concorrente `Modern Warfare 3` nao deve ser aceito como o mesmo jogo.
+- O worker agora comeca uma coleta completa limpa por padrao, sem reaproveitar itens antigos. Para retomar parcial seria preciso ligar `WORKER_RESUME=1`, mas isso nao e recomendado enquanto estamos refinando as regras.
 
 ## Arquivos principais
 
