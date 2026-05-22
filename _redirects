@@ -2,3 +2,4 @@
 /api/report /.netlify/functions/price-report 200
 /api/refresh-all /.netlify/functions/refresh-catalog-background 200
 /api/refresh-batch /.netlify/functions/refresh-batch 200
+/api/trigger-refresh /.netlify/functions/trigger-render-refresh 200
