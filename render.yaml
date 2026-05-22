@@ -3,7 +3,7 @@ services:
     name: nexus-price-worker
     runtime: node
     plan: starter
-    schedule: "0 8 * * *"
+    schedule: "0 8 1 1 *"
     buildCommand: "npm install"
     startCommand: "npm run worker:refresh"
     envVars:
