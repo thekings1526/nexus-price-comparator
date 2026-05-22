@@ -31,6 +31,10 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - Cron Job Render criado: `nexus-price-worker`
 - Render cron ID: `crn-d87t66n7f7vs73dqjnpg`
 - Agenda configurada como `0 8 1 1 *` para nao rodar todo dia sozinho. O uso normal sera manual pelo painel.
+- Em 22/05/2026, a coleta falhou com `HTTP 403` em produto da Nexus. Produto abria normal fora do worker, entao a causa provavel e bloqueio por ritmo/volume de requisicoes.
+- Ajuste feito: worker conservador com `WORKER_BATCH_SIZE=1`, `WORKER_REQUEST_DELAY_MS=1200` e `WORKER_ITEM_RETRIES=1`.
+- Regra atual: nao pular produto. Se um produto travar, a coleta para e mostra o item para investigarmos a raiz.
+- A base foi reiniciada depois de suspender/retomar o Render; coleta limpa recomecou do item 1.
 
 ## Arquivos principais
 
