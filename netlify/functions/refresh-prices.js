@@ -35,6 +35,9 @@ async function buildReport(options = {}) {
   const limit = normalizeLimit(options.limit);
   const offset = Math.max(Number(options.offset) || 0, 0);
   const batchSize = options.batchSize ? clamp(Number(options.batchSize), 1, 20) : null;
+  const competitorCatalogs = normalizeCompetitorCatalogs(options.competitorCatalogs);
+  const parsedCompetitorCache = options.parsedCompetitorCache || new Map();
+  const ownProductCache = options.ownProductCache || new Map();
   const discoveredItems = Array.isArray(options.items) && options.items.length
     ? options.items.slice(0, limit)
     : await discoverOwnProducts(limit);
@@ -42,8 +45,7 @@ async function buildReport(options = {}) {
 
   const items = [];
   for (const tracked of trackedItems) {
-    const ownPage = tracked.url ? await fetchProduct(tracked.url) : null;
-    const ownProduct = ownPage ? parseProductPage(ownPage.html, ownPage.url) : normalizeManualItem(tracked);
+    const ownProduct = await getOwnProduct(tracked, ownProductCache);
     if (!ownProduct || !ownProduct.title) continue;
 
     const licenses = {};
@@ -56,7 +58,7 @@ async function buildReport(options = {}) {
 
     const competitorMatches = await Promise.all(selectedCompetitors.map(async (competitor) => ({
       competitor,
-      match: await findCompetitorProduct(competitor, ownProduct).catch(() => null)
+      match: await findCompetitorProductForReport(competitor, ownProduct, competitorCatalogs.get(competitor.id), parsedCompetitorCache).catch(() => null)
     })));
 
     for (const { competitor, match } of competitorMatches) {
@@ -88,6 +90,15 @@ async function buildReport(options = {}) {
       image: ownProduct.image,
       licenses
     });
+
+    if (typeof options.onItem === "function") {
+      await options.onItem({
+        item: items[items.length - 1],
+        items,
+        index: items.length - 1,
+        total: discoveredItems.length
+      });
+    }
   }
 
   return {
@@ -101,6 +112,25 @@ async function buildReport(options = {}) {
     batchSize: batchSize || discoveredItems.length,
     items
   };
+}
+
+async function getOwnProduct(tracked, cache) {
+  if (!tracked?.url) return normalizeManualItem(tracked);
+  if (cache.has(tracked.url)) return cache.get(tracked.url);
+  const ownPage = await fetchProduct(tracked.url);
+  const ownProduct = parseProductPage(ownPage.html, ownPage.url);
+  cache.set(tracked.url, ownProduct);
+  return ownProduct;
+}
+
+function normalizeCompetitorCatalogs(input) {
+  const normalized = new Map();
+  if (!input) return normalized;
+  if (input instanceof Map) return input;
+  for (const [id, items] of Object.entries(input)) {
+    normalized.set(id, Array.isArray(items) ? items : []);
+  }
+  return normalized;
 }
 
 function normalizeLimit(limit) {
@@ -295,6 +325,86 @@ async function findCompetitorProduct(competitor, ownProduct) {
     }
   }
   return validated.sort((a, b) => b.score - a.score)[0]?.product || null;
+}
+
+async function findCompetitorProductForReport(competitor, ownProduct, catalog, parsedCache) {
+  if (Array.isArray(catalog) && catalog.length) {
+    return findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache);
+  }
+  return findCompetitorProduct(competitor, ownProduct);
+}
+
+async function findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache = new Map()) {
+  const ranked = catalog
+    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct, { preview: true }) }))
+    .filter((link) => link.score >= 7)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Number(process.env.CATALOG_CANDIDATE_LIMIT || 8));
+
+  const validated = [];
+  for (const candidate of ranked) {
+    try {
+      const product = await getParsedCompetitorProduct(candidate.url, parsedCache);
+      const score = scoreCandidate(product, ownProduct);
+      if (score >= 16) validated.push({ product, score });
+    } catch {
+      // Keep trying the next catalog candidate.
+    }
+  }
+  return validated.sort((a, b) => b.score - a.score)[0]?.product || null;
+}
+
+async function getParsedCompetitorProduct(url, cache) {
+  if (cache.has(url)) return cache.get(url);
+  const productPage = await fetchProduct(url);
+  const product = parseProductPage(productPage.html, productPage.url);
+  cache.set(url, product);
+  return product;
+}
+
+async function discoverCompetitorCatalogs(competitors = COMPETITORS) {
+  const catalogs = new Map();
+  for (const competitor of competitors) {
+    catalogs.set(competitor.id, await discoverCompetitorCatalog(competitor));
+  }
+  return catalogs;
+}
+
+async function discoverCompetitorCatalog(competitor) {
+  const sitemapUrls = await discoverProductSitemapUrls(competitor.baseUrl);
+  const links = [];
+  for (const sitemapUrl of sitemapUrls) {
+    try {
+      const response = await fetchHtml(sitemapUrl);
+      for (const url of extractSitemapLocs(response.html)) {
+        if (!isLikelyProductUrl(url, competitor.baseUrl, "")) continue;
+        links.push(productLinkFromUrl(url));
+      }
+    } catch {
+      // Keep the catalog usable even if one sitemap shard fails.
+    }
+  }
+  return uniqueBy(links, (item) => item.url);
+}
+
+async function discoverProductSitemapUrls(baseUrl) {
+  const sitemapUrl = new URL("sitemap.xml", baseUrl).toString();
+  const response = await fetchHtml(sitemapUrl);
+  const urls = extractSitemapLocs(response.html).filter((url) => /\/sitemap\/product-\d+\.xml/i.test(url));
+  return urls.length ? urls : [sitemapUrl];
+}
+
+function extractSitemapLocs(xml) {
+  return Array.from(xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi))
+    .map((item) => cleanText(item[1]))
+    .filter(Boolean);
+}
+
+function productLinkFromUrl(url) {
+  return {
+    url,
+    text: titleFromUrl(url)
+  };
 }
 
 async function fetchProduct(url) {
@@ -535,6 +645,8 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasConflictingExtraEdition(ownTitleTokens, candidateTitleTokens)) return 0;
 
   let tokenScore = 0;
   let meaningfulMatches = 0;
@@ -557,6 +669,16 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
 
 function titleCoverageAccepted(ownTokens, candidateTokens) {
   return titleCoverageScore(ownTokens, candidateTokens) >= 8;
+}
+
+function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
+  const ownSet = new Set(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (ownSet.has("call") && ownSet.has("duty") && candidateSet.has("call") && candidateSet.has("duty")) {
+    const subtitle = ownTokens.filter((token) => !CALL_OF_DUTY_BASE_TOKENS.has(token) && !/^\d+$/.test(token));
+    return subtitle.every((token) => candidateSet.has(token));
+  }
+  return true;
 }
 
 function titleNumberTokens(tokens) {
@@ -613,6 +735,12 @@ function editionCompatibilityScore(ownTokens, candidateTokens) {
   const extraCandidate = candidateEditions.filter((token) => !ownTokens.includes(token) && token !== "standard");
   score -= extraCandidate.length * 10;
   return score;
+}
+
+function hasConflictingExtraEdition(ownTokens, candidateTokens) {
+  const ownSet = new Set(ownTokens);
+  return Array.from(candidateTokens)
+    .some((token) => STRONG_EXTRA_EDITION_TOKENS.has(token) && !ownSet.has(token));
 }
 
 function imageLooksRelated(ownImage, candidateImage) {
@@ -781,6 +909,19 @@ function slugify(value) {
   return normalize(value).replace(/\s+/g, "-").slice(0, 80);
 }
 
+function titleFromUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const segment = parsed.pathname.split("/").filter(Boolean).pop() || "";
+    return cleanText(segment
+      .replace(/-/g, " ")
+      .replace(/\bmidia\b/gi, " midia ")
+      .replace(/\bdigital\b/gi, " digital "));
+  } catch {
+    return "";
+  }
+}
+
 function imageKey(value) {
   try {
     const parsed = new URL(value);
@@ -886,6 +1027,26 @@ const EDITION_TOKENS = new Set([
   "standard"
 ]);
 
+const CALL_OF_DUTY_BASE_TOKENS = new Set(["call", "duty", "cod"]);
+
+const STRONG_EXTRA_EDITION_TOKENS = new Set([
+  "gold",
+  "ultimate",
+  "deluxe",
+  "complete",
+  "collection",
+  "colecao",
+  "trilogy",
+  "bundle",
+  "legendary",
+  "definitive",
+  "remake",
+  "remaster",
+  "remastered",
+  "champions",
+  "premium"
+]);
+
 const ROMAN_NUMERALS = {
   ii: "2",
   iii: "3",
@@ -905,6 +1066,8 @@ module.exports.getSavedReport = getSavedReport;
 module.exports.saveCatalogItems = saveCatalogItems;
 module.exports.getCatalogItems = getCatalogItems;
 module.exports.discoverOwnProducts = discoverOwnProducts;
+module.exports.discoverCompetitorCatalogs = discoverCompetitorCatalogs;
+module.exports.discoverCompetitorCatalog = discoverCompetitorCatalog;
 module.exports.setRefreshStatus = setRefreshStatus;
 module.exports.getRefreshStatus = getRefreshStatus;
 module.exports.COMPETITORS = COMPETITORS;
