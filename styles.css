@@ -22,6 +22,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -405,6 +409,165 @@ h1 {
   font-weight: 700;
 }
 
+.review-pill {
+  margin-top: 2px;
+}
+
+.review-confirmed {
+  color: var(--green) !important;
+}
+
+.review-auto-high {
+  color: var(--blue) !important;
+}
+
+.review-auto-medium,
+.review-needs-review {
+  color: var(--amber) !important;
+}
+
+.review-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.review-actions button,
+.candidate-card button,
+.icon-button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.review-actions button:disabled,
+.candidate-card button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.source-link {
+  color: var(--blue);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(16, 24, 40, 0.56);
+}
+
+.review-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(980px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, 0.28);
+  overflow: hidden;
+}
+
+.review-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-modal-head h2 {
+  margin: 2px 0 0;
+  font-size: 1.1rem;
+}
+
+.review-modal-head .label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.icon-button {
+  width: 34px;
+  min-height: 34px;
+  font-size: 1.2rem;
+}
+
+.review-modal-body {
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.review-own,
+.candidate-card {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-alt);
+}
+
+.review-own {
+  grid-template-columns: 64px minmax(0, 1fr);
+  background: #eef2f6;
+}
+
+.review-own img,
+.candidate-card img {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--slate-soft);
+}
+
+.review-own div,
+.candidate-card div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.candidate-card a,
+.review-own strong {
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-card small,
+.review-own small,
+.review-own span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 8px;
+}
+
 .empty-state {
   padding: 34px 18px;
   color: var(--muted);
@@ -454,5 +617,13 @@ h1 {
 
   .competitors {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .candidate-card {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .candidate-card button {
+    grid-column: 1 / -1;
   }
 }
