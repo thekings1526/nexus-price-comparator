@@ -35,10 +35,10 @@ O Render usa UTC. Essa agenda deixa o cron praticamente parado; o uso normal e d
 - `NEXUS_BLOBS_SITE_ID`: `2a213dd3-1777-497e-b33c-979c47cd0924`
 - `NEXUS_BLOBS_TOKEN`: token do Netlify
 - `WORKER_BATCH_SIZE`: `1`
-- `WORKER_REQUEST_DELAY_MS`: `250`
+- `WORKER_REQUEST_DELAY_MS`: `150`
 - `WORKER_ITEM_RETRIES`: `1`
 - `WORKER_SAVE_EVERY`: `5`
-- `CATALOG_CANDIDATE_LIMIT`: `8`
+- `CATALOG_CANDIDATE_LIMIT`: `5`
 
 ## Depois de criar
 
