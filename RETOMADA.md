@@ -43,6 +43,8 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - Quando a busca do concorrente devolve link sem texto visivel, a primeira triagem usa tambem o endereco do produto como nome provisorio. A validacao final ainda abre a pagina e confere o titulo real.
 - A pontuacao da triagem inicial agora e mais leve do que a validacao final. Isso evita perder produtos quando a busca do concorrente retorna so o link, mas a pagina aberta ainda precisa passar pela regra completa.
 - A escolha do concorrente agora avalia todos os candidatos abertos e escolhe o melhor pela pontuacao final, em vez de aceitar o primeiro candidato valido. Isso ajuda a evitar trocar versao normal por `Ultimate`, `Deluxe` etc.
+- Jogos com titulo curto, como `FC 26`, `Minecraft` e `PES 2020`, usam uma pontuacao minima final menor quando o titulo bate bem, porque muitas paginas de concorrente nao trazem descricao suficiente.
+- A comparacao de edicao agora olha o titulo, nao a descricao. Isso evita ler termos como `Ultimate Team` da descricao do FC como se o produto fosse `Ultimate Edition`.
 
 ## Arquivos principais
 
