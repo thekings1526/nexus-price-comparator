@@ -34,6 +34,7 @@ const elements = {
   syncStatus: document.querySelector("#syncStatus"),
   syncDetails: document.querySelector("#syncDetails"),
   syncProgress: document.querySelector("#syncProgress"),
+  runWorkerButton: document.querySelector("#runWorkerButton"),
   searchInput: document.querySelector("#searchInput"),
   statusSelect: document.querySelector("#statusSelect"),
   licenseSelect: document.querySelector("#licenseSelect"),
@@ -85,6 +86,8 @@ function bindEvents() {
     state.threshold = Number(event.target.value) || 0;
     render();
   });
+
+  elements.runWorkerButton.addEventListener("click", triggerWorkerRun);
 }
 
 function render() {
@@ -231,6 +234,31 @@ async function loadSavedReport() {
     render();
   } catch {
     renderSyncStatus();
+  }
+}
+
+async function triggerWorkerRun() {
+  const confirmed = window.confirm("Esta acao inicia uma coleta no Render. Cada execucao pode gerar cobranca. Deseja continuar?");
+  if (!confirmed) return;
+
+  elements.runWorkerButton.disabled = true;
+  elements.runWorkerButton.textContent = "Iniciando...";
+  elements.syncStatus.textContent = "Solicitando coleta";
+  elements.syncDetails.textContent = "Aguarde alguns segundos para o Render iniciar.";
+
+  try {
+    const response = await fetch("/api/trigger-refresh", { method: "POST" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Nao consegui iniciar a coleta");
+    elements.syncStatus.textContent = "Coleta iniciada";
+    elements.syncDetails.textContent = "O progresso aparecera aqui enquanto o worker salvar os lotes.";
+    setTimeout(loadSavedReport, 5000);
+  } catch (error) {
+    elements.syncStatus.textContent = "Falha ao iniciar coleta";
+    elements.syncDetails.textContent = error.message || "Tente novamente pelo painel do Render.";
+  } finally {
+    elements.runWorkerButton.disabled = false;
+    elements.runWorkerButton.textContent = "Executar coleta";
   }
 }
 
