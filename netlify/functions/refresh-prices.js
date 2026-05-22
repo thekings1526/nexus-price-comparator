@@ -525,8 +525,10 @@ function scoreCandidate(candidate, ownProduct) {
   const candidateTokens = new Set(gameTokens(candidateText));
   const ownTitleTokens = gameTokens(ownProduct.title);
   const candidateTitleTokens = new Set(gameTokens(`${candidate.text || ""} ${candidate.title || ""}`));
-  const ownNumbers = ownTitleTokens.filter((token) => /^\d+$/.test(token));
-  if (ownNumbers.some((token) => !candidateTokens.has(token))) return 0;
+  const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
+  const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
+  if (Array.from(ownTitleNumbers).some((token) => !candidateTitleNumbers.has(token) && !candidateTokens.has(token))) return 0;
+  if (Array.from(candidateTitleNumbers).some((token) => !ownTitleNumbers.has(token))) return 0;
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -551,6 +553,12 @@ function scoreCandidate(candidate, ownProduct) {
 
 function titleCoverageAccepted(ownTokens, candidateTokens) {
   return titleCoverageScore(ownTokens, candidateTokens) >= 8;
+}
+
+function titleNumberTokens(tokens) {
+  return new Set(tokens
+    .map((token) => ROMAN_NUMERALS[token] || token)
+    .filter((token) => /^\d+$/.test(token)));
 }
 
 function titleCoverageScore(ownTokens, candidateTokens) {
@@ -842,6 +850,18 @@ const EDITION_TOKENS = new Set([
   "premium",
   "standard"
 ]);
+
+const ROMAN_NUMERALS = {
+  ii: "2",
+  iii: "3",
+  iv: "4",
+  v: "5",
+  vi: "6",
+  vii: "7",
+  viii: "8",
+  ix: "9",
+  x: "10"
+};
 
 module.exports.buildReport = buildReport;
 module.exports.saveReport = saveReport;
