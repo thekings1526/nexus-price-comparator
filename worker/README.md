@@ -10,10 +10,12 @@ Config:
 
 - Build command: `npm install`
 - Start command: `npm run worker:refresh`
-- Schedule: `0 8 * * *`
+- Schedule: `0 8 1 1 *`
 - Environment variables:
   - `NEXUS_BLOBS_SITE_ID`
   - `NEXUS_BLOBS_TOKEN`
-  - `WORKER_BATCH_SIZE=4`
+  - `WORKER_BATCH_SIZE=1`
+  - `WORKER_REQUEST_DELAY_MS=1200`
+  - `WORKER_ITEM_RETRIES=1`
 
-O horario do cron no Render e UTC. `0 8 * * *` roda uma vez por dia as 05:00 no horario de Brasilia.
+O horario do cron no Render e UTC. Essa agenda deixa o cron praticamente parado; o uso normal e disparar a coleta manualmente pelo painel.
