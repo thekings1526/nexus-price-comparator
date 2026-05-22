@@ -41,6 +41,7 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - O worker agora comeca uma coleta completa limpa por padrao, sem reaproveitar itens antigos. Para retomar parcial seria preciso ligar `WORKER_RESUME=1`, mas isso nao e recomendado enquanto estamos refinando as regras.
 - A busca agora avalia mais candidatos por concorrente e trata numeros romanos como equivalentes aos numeros normais no titulo, por exemplo `II` e `2`.
 - Quando a busca do concorrente devolve link sem texto visivel, a primeira triagem usa tambem o endereco do produto como nome provisorio. A validacao final ainda abre a pagina e confere o titulo real.
+- A pontuacao da triagem inicial agora e mais leve do que a validacao final. Isso evita perder produtos quando a busca do concorrente retorna so o link, mas a pagina aberta ainda precisa passar pela regra completa.
 
 ## Arquivos principais
 
