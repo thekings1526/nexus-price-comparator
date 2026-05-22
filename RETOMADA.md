@@ -27,6 +27,8 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - O botao manual de atualizar foi removido da tela.
 - O painel mostra status da coleta e progresso.
 - O status salvo atual pode aparecer como coleta parcial ate o worker externo rodar completo.
+- Repositorio GitHub criado: https://github.com/thekings1526/nexus-price-comparator
+- Tentativa de criar Cron Job no Render via API falhou porque a conta precisa cadastrar pagamento primeiro.
 
 ## Arquivos principais
 
@@ -39,6 +41,7 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - `render.yaml`: configuracao sugerida para Render Cron Job.
 - `worker/README.md`: passo a passo do worker.
 - `COORDENADAS_RENDER.md`: guia direto do que falta configurar no Render.
+- `.github/workflows/daily-refresh.yml`: plano B usando GitHub Actions.
 
 ## Variaveis necessarias no Render
 
@@ -59,11 +62,12 @@ O Render usa UTC. Esse horario roda por volta de 05:00 no horario de Brasilia.
 ## Proximos passos
 
 1. Subir este projeto para um repositorio GitHub.
-2. Criar um Cron Job no Render conectado ao repositorio.
-3. Configurar as variaveis acima no Render.
-4. Rodar o Cron Job manualmente uma primeira vez pelo painel do Render.
-5. Conferir no painel da Netlify se o status chega em `1039 de 1039`.
-6. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
+2. Cadastrar pagamento no Render em https://dashboard.render.com/billing.
+3. Criar um Cron Job no Render conectado ao repositorio.
+4. Configurar as variaveis acima no Render.
+5. Rodar o Cron Job manualmente uma primeira vez pelo painel do Render.
+6. Conferir no painel da Netlify se o status chega em `1039 de 1039`.
+7. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
 
 ## Observacoes importantes
 
