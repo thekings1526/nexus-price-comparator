@@ -5,7 +5,7 @@ Painel separado para acompanhar precos da Nexus Games Digital contra concorrente
 ## Arquitetura atual
 
 - Netlify: hospeda somente o painel leve e as funcoes de leitura/salvamento.
-- Worker externo: roda a coleta pesada diariamente e grava o relatorio no Netlify Blobs.
+- Worker externo: roda a coleta pesada sob demanda e grava o relatorio no Netlify Blobs.
 - Render Cron Job: recomendacao atual para hospedar o worker, porque a coleta pode demorar bastante.
 
 ## Publicado
@@ -29,6 +29,7 @@ Painel separado para acompanhar precos da Nexus Games Digital contra concorrente
 - Permite filtrar por comparacao e licenca.
 - Permite ordenar por prioridade, diferenca e preco.
 - Mostra status da coleta: itens processados, total e progresso.
+- Permite iniciar uma coleta manual com aviso de custo.
 
 ## O que fica fora da Netlify
 
