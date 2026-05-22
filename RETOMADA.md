@@ -11,7 +11,7 @@ Criar um comparador de precos para a Nexus Games Digital, comparando cada jogo c
 Nao vamos levar o site todo para outro lugar. A arquitetura escolhida e hibrida:
 
 - Netlify fica com o painel visual leve.
-- Um worker externo roda a coleta pesada uma vez por dia.
+- Um worker externo roda a coleta pesada sob demanda.
 - O worker salva o resultado no Netlify Blobs.
 - O painel da Netlify apenas le o relatorio salvo.
 
@@ -28,7 +28,9 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - O painel mostra status da coleta e progresso.
 - O status salvo atual pode aparecer como coleta parcial ate o worker externo rodar completo.
 - Repositorio GitHub criado: https://github.com/thekings1526/nexus-price-comparator
-- Tentativa de criar Cron Job no Render via API falhou porque a conta precisa cadastrar pagamento primeiro.
+- Cron Job Render criado: `nexus-price-worker`
+- Render cron ID: `crn-d87t66n7f7vs73dqjnpg`
+- Agenda configurada como `0 8 1 1 *` para nao rodar todo dia sozinho. O uso normal sera manual pelo painel.
 
 ## Arquivos principais
 
@@ -38,7 +40,7 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - `netlify/functions/refresh-prices.js`: parser e regras de busca/preco.
 - `netlify/functions/price-report.js`: API usada pelo painel para ler relatorio/status.
 - `worker/daily-refresh.js`: coleta pesada para rodar fora da Netlify.
-- `render.yaml`: configuracao sugerida para Render Cron Job.
+- `render.yaml`: configuracao sugerida para Render Cron Job manual/quase parado.
 - `worker/README.md`: passo a passo do worker.
 - `COORDENADAS_RENDER.md`: guia direto do que falta configurar no Render.
 - `.github/workflows/daily-refresh.yml`: plano B usando GitHub Actions.
@@ -62,12 +64,10 @@ O Render usa UTC. Esse horario roda por volta de 05:00 no horario de Brasilia.
 ## Proximos passos
 
 1. Subir este projeto para um repositorio GitHub.
-2. Cadastrar pagamento no Render em https://dashboard.render.com/billing.
-3. Criar um Cron Job no Render conectado ao repositorio.
-4. Configurar as variaveis acima no Render.
-5. Rodar o Cron Job manualmente uma primeira vez pelo painel do Render.
-6. Conferir no painel da Netlify se o status chega em `1039 de 1039`.
-7. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
+2. Configurar env vars na Netlify para disparar o Render pelo painel.
+3. Rodar a primeira coleta.
+4. Conferir no painel da Netlify se o status chega em `1039 de 1039`.
+5. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
 
 ## Observacoes importantes
 
