@@ -1,0 +1,8 @@
+.netlify/
+node_modules/
+dist/
+.deploy/
+.env
+.env.*
+!.env.example
+*.log
