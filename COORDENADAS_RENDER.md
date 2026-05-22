@@ -68,6 +68,9 @@ O Render usa UTC. Esse horario roda por volta de 05:00 no horario de Brasilia.
 
 Tambem existe workflow pronto em `.github/workflows/daily-refresh.yml`.
 
+Observacao: para eu subir esse workflow pelo GitHub API, o token do GitHub precisa ter tambem o escopo `workflow`.
+O token atual criou/subiu o repositorio, mas o GitHub bloqueou a criacao do arquivo de workflow.
+
 Para usar esse plano, cadastre estes secrets no GitHub:
 
 - `NEXUS_BLOBS_SITE_ID`
