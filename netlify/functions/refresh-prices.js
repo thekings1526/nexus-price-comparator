@@ -524,6 +524,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
 
   const ownTokens = gameTokens(`${ownProduct.title || ""} ${ownProduct.description || ""}`);
   const candidateTokens = new Set(gameTokens(candidateText));
+  const comparableCandidateTokens = comparableTokenSet(candidateTokens);
   const ownTitleTokens = gameTokens(ownProduct.title);
   const candidateTitleSource = cleanText(`${candidate.text || ""} ${candidate.title || ""}`) || candidate.url || "";
   const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
@@ -538,7 +539,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   let tokenScore = 0;
   let meaningfulMatches = 0;
   for (const token of ownTokens) {
-    if (!candidateTokens.has(token)) continue;
+    if (!comparableCandidateTokens.has(token)) continue;
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
@@ -559,9 +560,14 @@ function titleCoverageAccepted(ownTokens, candidateTokens) {
 }
 
 function titleNumberTokens(tokens) {
-  return new Set(tokens
-    .map((token) => ROMAN_NUMERALS[token] || token)
-    .filter((token) => /^\d+$/.test(token)));
+  const numbers = new Set();
+  for (const token of tokens) {
+    const normalized = ROMAN_NUMERALS[token] || token;
+    if (!/^\d+$/.test(normalized)) continue;
+    numbers.add(normalized);
+    for (const variant of seasonNumberVariants(normalized)) numbers.add(variant);
+  }
+  return numbers;
 }
 
 function titleCoverageScore(ownTokens, candidateTokens) {
@@ -580,8 +586,21 @@ function comparableTokenSet(tokens) {
   const comparable = new Set(tokens);
   for (const token of tokens) {
     if (ROMAN_NUMERALS[token]) comparable.add(ROMAN_NUMERALS[token]);
+    for (const variant of seasonNumberVariants(token)) comparable.add(variant);
   }
   return comparable;
+}
+
+function seasonNumberVariants(token) {
+  if (/^\d{2}$/.test(token)) {
+    const year = Number(token);
+    if (year <= 35) return [`20${token}`];
+  }
+  if (/^20\d{2}$/.test(token)) {
+    const year = Number(token.slice(2));
+    if (year <= 35) return [String(year).padStart(2, "0").replace(/^0/, "")];
+  }
+  return [];
 }
 
 function editionCompatibilityScore(ownTokens, candidateTokens) {
