@@ -33,7 +33,7 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Agenda configurada como `0 8 1 1 *` para nao rodar todo dia sozinho. O uso normal sera manual pelo painel.
 - Em 22/05/2026, a coleta falhou com `HTTP 403` em produto da Nexus. Produto abria normal fora do worker, entao a causa provavel e bloqueio por ritmo/volume de requisicoes.
 - Ajuste feito: worker indexa primeiro os sitemaps de produtos dos concorrentes, compara em memoria e so abre as paginas candidatas mais provaveis.
-- Config atual sugerida: `WORKER_REQUEST_DELAY_MS=250`, `WORKER_SAVE_EVERY=5`, `CATALOG_CANDIDATE_LIMIT=8` e `WORKER_ITEM_RETRIES=1`.
+- Config atual sugerida: `WORKER_REQUEST_DELAY_MS=150`, `WORKER_SAVE_EVERY=5`, `CATALOG_CANDIDATE_LIMIT=5` e `WORKER_ITEM_RETRIES=1`.
 - Regra atual: nao pular produto. Se um produto travar, a coleta para e mostra o item para investigarmos a raiz.
 - A base foi reiniciada depois de suspender/retomar o Render; coleta limpa recomecou do item 1.
 - Regra de comparacao atual: o nome do jogo e a plataforma continuam sendo os sinais mais fortes. Imagem, descricao e edicao entram como reforco de confianca, mas nao sao exigidas como match perfeito para nao perder produtos validos.
@@ -74,10 +74,10 @@ Nao salvar token real no repositorio.
 - `NEXUS_BLOBS_SITE_ID`
 - `NEXUS_BLOBS_TOKEN`
 - `WORKER_BATCH_SIZE=1`
-- `WORKER_REQUEST_DELAY_MS=250`
+- `WORKER_REQUEST_DELAY_MS=150`
 - `WORKER_ITEM_RETRIES=1`
 - `WORKER_SAVE_EVERY=5`
-- `CATALOG_CANDIDATE_LIMIT=8`
+- `CATALOG_CANDIDATE_LIMIT=5`
 
 ## Render Cron Job sugerido
 
