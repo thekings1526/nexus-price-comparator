@@ -276,7 +276,7 @@ async function findCompetitorProduct(competitor, ownProduct) {
 
   const links = Array.from(linksByUrl.values());
   const ranked = links
-    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct) }))
+    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct, { preview: true }) }))
     .filter((link) => link.score >= 7)
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);
@@ -514,7 +514,7 @@ function isLikelyProductUrl(url, baseUrl, text) {
   return segmentCount === 1 && (path.includes("-") || /midia|m[ií]dia|digital|ps4|ps5|xbox|switch/i.test(`${path} ${text}`));
 }
 
-function scoreCandidate(candidate, ownProduct) {
+function scoreCandidate(candidate, ownProduct, options = {}) {
   const candidateText = normalize(`${candidate.text || ""} ${candidate.title || ""} ${candidate.description || ""} ${candidate.url || ""}`);
   if (isRental(candidateText)) return 0;
   const ownPlatform = normalize(ownProduct.platform || "");
@@ -541,7 +541,8 @@ function scoreCandidate(candidate, ownProduct) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  if (!meaningfulMatches || tokenScore < 6) return 0;
+  const minimumTokenScore = options.preview ? 3 : 6;
+  if (!meaningfulMatches || tokenScore < minimumTokenScore) return 0;
 
   let score = tokenScore;
   score += titleCoverageScore(ownTitleTokens, candidateTitleTokens);
