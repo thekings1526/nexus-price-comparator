@@ -279,7 +279,7 @@ async function findCompetitorProduct(competitor, ownProduct) {
     .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct) }))
     .filter((link) => link.score >= 7)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+    .slice(0, 12);
 
   for (const candidate of ranked) {
     try {
@@ -565,11 +565,20 @@ function titleCoverageScore(ownTokens, candidateTokens) {
   const distinctOwn = uniqueBy(ownTokens, (token) => token)
     .filter((token) => !LOOSE_TITLE_TOKENS.has(token));
   if (!distinctOwn.length) return 0;
-  const matches = distinctOwn.filter((token) => candidateTokens.has(token));
+  const comparableCandidate = comparableTokenSet(candidateTokens);
+  const matches = distinctOwn.filter((token) => comparableCandidate.has(token) || comparableCandidate.has(ROMAN_NUMERALS[token]));
   const coverage = matches.length / distinctOwn.length;
   if (distinctOwn.length <= 2) return coverage === 1 ? 12 : 0;
   if (distinctOwn.length <= 4) return coverage >= 0.75 ? Math.round(12 * coverage) : 0;
   return coverage >= 0.68 ? Math.round(12 * coverage) : 0;
+}
+
+function comparableTokenSet(tokens) {
+  const comparable = new Set(tokens);
+  for (const token of tokens) {
+    if (ROMAN_NUMERALS[token]) comparable.add(ROMAN_NUMERALS[token]);
+  }
+  return comparable;
 }
 
 function editionCompatibilityScore(ownTokens, candidateTokens) {
@@ -598,7 +607,7 @@ function buildSearchQueries(product) {
     .replace(/\b(ps4|ps5)\b/gi, product.platform || "$1")
   );
   const aliases = aliasQueries(base);
-  return uniqueBy([base, ...aliases], normalize).filter(Boolean).slice(0, 4);
+  return uniqueBy([base, ...aliases], normalize).filter(Boolean).slice(0, 6);
 }
 
 function cleanSearchQuery(value) {
@@ -620,6 +629,10 @@ function aliasQueries(query) {
   if (/\bea sports fc\b|\bfc\s*\d{2}\b|\bfifa\s*\d{2}\b/.test(normalized)) {
     aliases.push(query.replace(/EA Sports FC/i, "EA FC").replace(/\(FIFA\s*(\d{2})\)/i, ""));
     aliases.push(query.replace(/EA Sports FC\s*(\d{2})/i, "FIFA $1"));
+  }
+  if (/\bpart\s+(ii|2)\s+2\b/.test(normalized)) {
+    aliases.push(query.replace(/\bPart\s+II\s+2\b/i, "Part II"));
+    aliases.push(query.replace(/\bPart\s+II\s+2\b/i, "Part 2"));
   }
   return aliases;
 }
