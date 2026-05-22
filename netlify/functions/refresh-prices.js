@@ -542,12 +542,12 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  const minimumTokenScore = options.preview ? 3 : 6;
+  const minimumTokenScore = options.preview ? 3 : (ownTitleTokens.length <= 2 ? 2 : 6);
   if (!meaningfulMatches || tokenScore < minimumTokenScore) return 0;
 
   let score = tokenScore;
   score += titleCoverageScore(ownTitleTokens, candidateTitleTokens);
-  score += editionCompatibilityScore(ownTokens, candidateTokens);
+  score += editionCompatibilityScore(ownTitleTokens, candidateTitleTokens);
   if (ownPlatform && candidatePlatforms.has(ownPlatform)) score += 5;
   if (imageLooksRelated(ownProduct.image, candidate.image)) score += 3;
   if (candidate.description && titleCoverageAccepted(ownTitleTokens, new Set(gameTokens(candidate.description)))) score += 2;
