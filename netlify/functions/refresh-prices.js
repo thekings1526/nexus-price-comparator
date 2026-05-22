@@ -324,12 +324,13 @@ async function findCompetitorProduct(competitor, ownProduct) {
       // Keep trying the next candidate.
     }
   }
-  return validated.sort((a, b) => b.score - a.score)[0]?.product || null;
+  return bestValidatedProduct(validated);
 }
 
 async function findCompetitorProductForReport(competitor, ownProduct, catalog, parsedCache) {
   if (Array.isArray(catalog) && catalog.length) {
-    return findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache);
+    const indexedMatch = await findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache);
+    if (indexedMatch) return indexedMatch;
   }
   return findCompetitorProduct(competitor, ownProduct);
 }
@@ -351,7 +352,17 @@ async function findCompetitorProductFromCatalog(competitor, ownProduct, catalog,
       // Keep trying the next catalog candidate.
     }
   }
-  return validated.sort((a, b) => b.score - a.score)[0]?.product || null;
+  return bestValidatedProduct(validated);
+}
+
+function bestValidatedProduct(validated) {
+  return validated
+    .sort((a, b) => Number(hasAnyLicensePrice(b.product)) - Number(hasAnyLicensePrice(a.product)) || b.score - a.score)[0]
+    ?.product || null;
+}
+
+function hasAnyLicensePrice(product) {
+  return ["primary", "secondary"].some((license) => typeof product?.licenses?.[license]?.price === "number");
 }
 
 async function getParsedCompetitorProduct(url, cache) {
@@ -831,6 +842,7 @@ function inferPlatform(value) {
   const text = normalize(value);
   if (/\bps5\b|playstation 5/.test(text)) return "PS5";
   if (/\bps4\b|playstation 4/.test(text)) return "PS4";
+  if (/\bps3\b|playstation 3/.test(text)) return "PS3";
   if (/xbox series/.test(text)) return "Xbox Series";
   if (/xbox one/.test(text)) return "Xbox One";
   if (/switch/.test(text)) return "Switch";
@@ -899,6 +911,7 @@ function platformsIn(value) {
   const platforms = new Set();
   if (/\bps5\b|playstation 5/.test(text)) platforms.add("ps5");
   if (/\bps4\b|playstation 4/.test(text)) platforms.add("ps4");
+  if (/\bps3\b|playstation 3/.test(text)) platforms.add("ps3");
   if (/xbox series/.test(text)) platforms.add("xbox series");
   if (/xbox one/.test(text)) platforms.add("xbox one");
   if (/switch/.test(text)) platforms.add("switch");
@@ -976,6 +989,7 @@ const STOP_WORDS = new Set([
   "digital",
   "ps4",
   "ps5",
+  "ps3",
   "playstation",
   "xbox",
   "one",
