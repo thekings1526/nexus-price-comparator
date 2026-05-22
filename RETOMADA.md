@@ -51,6 +51,8 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - A coleta nova nao faz mais busca nos concorrentes para cada jogo por padrao. Ela usa os sitemaps `sitemap/product-*.xml` como indice de URLs, ranqueia candidatos pelo nome/URL e valida abrindo a pagina final.
 - Franquias com subtitulo sensivel, como `Call of Duty`, exigem que o subtitulo principal bata. Isso evita comparar `Modern Warfare` com `Infinite Warfare`.
 - Edicoes fortes no titulo do concorrente, como `Remastered`, `Ultimate`, `Deluxe` e `Gold`, bloqueiam o match quando a Nexus nao traz essa edicao no titulo.
+- Se o indice por sitemap nao achar um concorrente com seguranca, o worker usa a busca antiga como fallback apenas para aquele concorrente/produto.
+- `PS3` agora e tratado como plataforma diferente para evitar que um produto PS4 caia em uma pagina PS3.
 
 ## Arquivos principais
 
