@@ -53,6 +53,13 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Edicoes fortes no titulo do concorrente, como `Remastered`, `Ultimate`, `Deluxe` e `Gold`, bloqueiam o match quando a Nexus nao traz essa edicao no titulo.
 - Se o indice por sitemap nao achar um concorrente com seguranca, o worker usa a busca antiga como fallback apenas para aquele concorrente/produto.
 - `PS3` agora e tratado como plataforma diferente para evitar que um produto PS4 caia em uma pagina PS3.
+- Em 22/05/2026 foi adicionada a revisao manual no painel: cada card de concorrente tem botoes `Correto`, `Errado`, `Trocar` e `Nao tem hoje`.
+- As correcoes manuais ficam salvas no Netlify Blobs em `match-overrides` e sao lidas pelo worker nas proximas coletas.
+- O modal `Trocar` mostra os dados do produto da Nexus e candidatos do concorrente dentro do proprio painel, com imagem, precos e leitura da IA observadora.
+- A IA observadora agora mostra confianca e motivos do match, mas nao decide sozinha acima das marcacoes manuais.
+- Foi corrigido um falso positivo importante: numero e edicao nao bastam mais para aceitar match. Precisa bater tambem pelo menos uma palavra forte do nome do jogo, evitando casos como `Remnant II 2 Ultimate` cair em `Dead Island 2 Ultimate`.
+- A alteracao foi publicada no GitHub no commit `03ef653` e no Netlify no deploy `6a105f13ed7186b050269e41`.
+- Uma nova coleta foi disparada no Render em 22/05/2026 para recalcular o relatorio com essas regras.
 
 ## Arquivos principais
 
@@ -89,9 +96,9 @@ O Render usa UTC. Essa agenda deixa o cron praticamente parado; o uso normal e d
 
 ## Proximos passos
 
-1. Publicar o worker com indice de sitemaps no GitHub/Render.
-2. Reiniciar a coleta para gerar um relatorio limpo com o fluxo novo.
-3. Conferir no painel da Netlify se o status chega no total encontrado do catalogo.
+1. Aguardar a coleta atual do Render finalizar.
+2. Conferir no painel se o status chega no total encontrado do catalogo.
+3. Usar `Correto`, `Errado`, `Trocar` e `Nao tem hoje` para ensinar os pares que ainda ficarem duvidosos.
 4. Revisar os produtos que ficarem sem preco confiavel e ajustar regras caso necessario.
 
 ## Observacoes importantes
