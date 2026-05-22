@@ -281,19 +281,20 @@ async function findCompetitorProduct(competitor, ownProduct) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);
 
+  const validated = [];
   for (const candidate of ranked) {
     try {
       const productPage = await fetchProduct(candidate.url);
       const product = parseProductPage(productPage.html, productPage.url);
       const score = scoreCandidate(product, ownProduct);
       if (score >= 16) {
-        return product;
+        validated.push({ product, score });
       }
     } catch {
       // Keep trying the next candidate.
     }
   }
-  return null;
+  return validated.sort((a, b) => b.score - a.score)[0]?.product || null;
 }
 
 async function fetchProduct(url) {
@@ -591,7 +592,7 @@ function editionCompatibilityScore(ownTokens, candidateTokens) {
     score += candidateTokens.has(token) ? 2 : -3;
   }
   const extraCandidate = candidateEditions.filter((token) => !ownTokens.includes(token) && token !== "standard");
-  score -= extraCandidate.length * 4;
+  score -= extraCandidate.length * 10;
   return score;
 }
 
