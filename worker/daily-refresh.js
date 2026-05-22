@@ -3,6 +3,7 @@ const {
   discoverCompetitorCatalogs,
   discoverOwnProducts,
   getSavedReport,
+  getReviewOverrides,
   saveCatalogItems,
   saveReportWithStatus,
   COMPETITORS
@@ -41,6 +42,7 @@ async function main() {
   });
 
   const competitorCatalogs = await discoverCompetitorCatalogs(selectedCompetitors);
+  const reviewOverrides = await getReviewOverrides().catch(() => null);
   const catalogSummary = Array.from(competitorCatalogs.entries())
     .map(([id, items]) => `${id}: ${items.length}`)
     .join(", ");
@@ -68,6 +70,7 @@ async function main() {
     competitorCatalogs,
     parsedCompetitorCache,
     ownProductCache,
+    reviewOverrides,
     selectedCompetitors,
     startOffset,
     totalItems: catalogItems.length,
@@ -120,6 +123,7 @@ async function buildReportWithRetry(context) {
         competitorCatalogs: context.competitorCatalogs,
         parsedCompetitorCache: context.parsedCompetitorCache,
         ownProductCache: context.ownProductCache,
+        reviewOverrides: context.reviewOverrides,
         onItem: async ({ items }) => {
           const offset = context.startOffset + items.length;
           if (offset % SAVE_EVERY !== 0 && offset < context.totalItems) return;
