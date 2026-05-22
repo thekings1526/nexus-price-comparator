@@ -3,3 +3,5 @@
 /api/refresh-all /.netlify/functions/refresh-catalog-background 200
 /api/refresh-batch /.netlify/functions/refresh-batch 200
 /api/trigger-refresh /.netlify/functions/trigger-render-refresh 200
+/api/review-decision /.netlify/functions/review-decision 200
+/api/review-candidates /.netlify/functions/review-candidates 200
