@@ -17,5 +17,6 @@ Config:
   - `WORKER_BATCH_SIZE=1`
   - `WORKER_REQUEST_DELAY_MS=1200`
   - `WORKER_ITEM_RETRIES=1`
+  - `WORKER_RESUME=1` somente se quiser retomar relatorio parcial antigo
 
 O horario do cron no Render e UTC. Essa agenda deixa o cron praticamente parado; o uso normal e disparar a coleta manualmente pelo painel.
