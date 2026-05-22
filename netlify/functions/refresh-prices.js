@@ -888,6 +888,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasConflictingExtraEdition(ownTitleTokens, candidateTitleTokens)) return 0;
 
@@ -912,6 +913,20 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
 
 function titleCoverageAccepted(ownTokens, candidateTokens) {
   return titleCoverageScore(ownTokens, candidateTokens) >= 8;
+}
+
+function coreTitleAgreementAccepted(ownTokens, candidateTokens) {
+  const coreOwn = coreTitleTokens(ownTokens);
+  if (!coreOwn.length) return true;
+  const comparableCandidate = comparableTokenSet(candidateTokens);
+  return coreOwn.some((token) => comparableCandidate.has(token) || comparableCandidate.has(ROMAN_NUMERALS[token]));
+}
+
+function coreTitleTokens(tokens) {
+  return uniqueBy(tokens, (token) => token)
+    .filter((token) => !/^\d+$/.test(ROMAN_NUMERALS[token] || token))
+    .filter((token) => !LOOSE_TITLE_TOKENS.has(token))
+    .filter((token) => !EDITION_TOKENS.has(token));
 }
 
 function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
