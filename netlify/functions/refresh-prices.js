@@ -15,6 +15,9 @@ const COMPETITORS = [
   { id: "coelho", name: "Coelho Gamer", baseUrl: "https://www.coelhogamer.com.br/" }
 ];
 
+let lastFetchAt = 0;
+let fetchQueue = Promise.resolve();
+
 exports.handler = async (event) => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
@@ -298,14 +301,19 @@ async function fetchProduct(url) {
 }
 
 async function fetchHtml(url) {
+  await waitForFetchSlot();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 14000);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "accept": "text/html,application/xhtml+xml",
-        "user-agent": "Mozilla/5.0 (compatible; NexusPriceComparator/1.0; +https://www.nexusgamesdigital.com/)"
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "cache-control": "no-cache",
+        "pragma": "no-cache",
+        "upgrade-insecure-requests": "1",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
       }
     });
     if (!response.ok) throw new Error(`HTTP ${response.status} em ${url}`);
@@ -313,6 +321,24 @@ async function fetchHtml(url) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function waitForFetchSlot() {
+  const delay = Math.max(Number(process.env.WORKER_REQUEST_DELAY_MS || process.env.REQUEST_DELAY_MS) || 0, 0);
+  if (!delay) return;
+  const jitter = Math.floor(Math.random() * Math.min(700, delay));
+  const run = fetchQueue.catch(() => null).then(async () => {
+    const elapsed = Date.now() - lastFetchAt;
+    const waitMs = Math.max(delay - elapsed, 0) + jitter;
+    if (waitMs > 0) await sleep(waitMs);
+    lastFetchAt = Date.now();
+  });
+  fetchQueue = run;
+  await run;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseProductPage(html, url) {
