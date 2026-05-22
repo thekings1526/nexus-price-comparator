@@ -13,6 +13,12 @@ Manter o painel na Netlify e criar apenas o worker no Render.
 
 ## O que falta para eu fazer por voce
 
+Tentativa pela API do Render feita em 22/05/2026. O Render retornou que e necessario cadastrar pagamento antes de criar o Cron Job.
+
+Link direto: https://dashboard.render.com/billing
+
+Depois que o pagamento estiver cadastrado, posso repetir a criacao automatica.
+
 Para eu criar o Render Cron Job diretamente, preciso de uma destas opcoes:
 
 ### Opcao A: voce cria o repositorio e me passa o link
@@ -57,3 +63,20 @@ O Render usa UTC. Esse horario roda por volta de 05:00 no horario de Brasilia.
 2. Abra o painel: https://comparadordeprecosnexus.netlify.app
 3. Veja o status subir ate `1039 de 1039`.
 4. Se passar de tempo ou falhar, reduzimos `WORKER_BATCH_SIZE` para `2`.
+
+## Plano B: GitHub Actions
+
+Tambem existe workflow pronto em `.github/workflows/daily-refresh.yml`.
+
+Para usar esse plano, cadastre estes secrets no GitHub:
+
+- `NEXUS_BLOBS_SITE_ID`
+- `NEXUS_BLOBS_TOKEN`
+
+Link do repositorio:
+
+https://github.com/thekings1526/nexus-price-comparator/settings/secrets/actions
+
+Depois, rode manualmente em:
+
+https://github.com/thekings1526/nexus-price-comparator/actions/workflows/daily-refresh.yml
