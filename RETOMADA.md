@@ -45,6 +45,8 @@ O catalogo encontrado tem cerca de 1039 itens. Para cada item, a coleta pode con
 - A escolha do concorrente agora avalia todos os candidatos abertos e escolhe o melhor pela pontuacao final, em vez de aceitar o primeiro candidato valido. Isso ajuda a evitar trocar versao normal por `Ultimate`, `Deluxe` etc.
 - Jogos com titulo curto, como `FC 26`, `Minecraft` e `PES 2020`, usam uma pontuacao minima final menor quando o titulo bate bem, porque muitas paginas de concorrente nao trazem descricao suficiente.
 - A comparacao de edicao agora olha o titulo, nao a descricao. Isso evita ler termos como `Ultimate Team` da descricao do FC como se o produto fosse `Ultimate Edition`.
+- Anos abreviados e completos agora sao equivalentes em titulos de temporada, por exemplo `FIFA 23` com `FIFA 2023` e `PES 2020` com `PES 20`.
+- Essa equivalencia de ano tambem vale na triagem inicial dos links de busca, nao apenas na validacao final da pagina.
 
 ## Arquivos principais
 
