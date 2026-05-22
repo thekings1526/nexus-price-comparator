@@ -23,7 +23,11 @@ const state = {
   search: "",
   sort: "status",
   threshold: 2,
-  refreshTimer: null
+  refreshTimer: null,
+  review: {
+    modalContext: null,
+    loading: false
+  }
 };
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -40,6 +44,11 @@ const elements = {
   licenseSelect: document.querySelector("#licenseSelect"),
   sortSelect: document.querySelector("#sortSelect"),
   thresholdInput: document.querySelector("#thresholdInput")
+  ,
+  reviewModal: document.querySelector("#reviewModal"),
+  reviewModalTitle: document.querySelector("#reviewModalTitle"),
+  reviewModalBody: document.querySelector("#reviewModalBody"),
+  closeReviewModal: document.querySelector("#closeReviewModal")
 };
 
 bindEvents();
@@ -88,6 +97,12 @@ function bindEvents() {
   });
 
   elements.runWorkerButton.addEventListener("click", triggerWorkerRun);
+  elements.rows.addEventListener("click", handleReviewAction);
+  elements.closeReviewModal.addEventListener("click", closeReviewModal);
+  elements.reviewModal.addEventListener("click", (event) => {
+    if (event.target === elements.reviewModal) closeReviewModal();
+  });
+  elements.reviewModalBody.addEventListener("click", handleModalAction);
 }
 
 function render() {
@@ -209,16 +224,156 @@ function renderCompetitors(entry) {
     const bestClass = entry.best?.id === competitor.id ? " best" : "";
     const missingClass = value?.price ? "" : " missing";
     const note = value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
+    const review = value?.review;
+    const reviewClass = review?.status ? ` review-${review.status}` : "";
+    const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
     const content = `
       <span class="competitor-name">${competitor.name}</span>
       <strong>${value?.price ? formatPrice(value.price) : "Sem preco"}</strong>
       ${note ? `<small>${note}</small>` : ""}
+      <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
+      <span class="review-actions">
+        <button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Correto</button>
+        <button type="button" data-review-action="wrong" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Errado</button>
+        <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}">Trocar</button>
+        <button type="button" data-review-action="missing-today" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}">Nao tem hoje</button>
+      </span>
     `;
-    if (value?.url) {
-      return `<a class="competitor${bestClass}${missingClass}" href="${value.url}" target="_blank" rel="noreferrer">${content}</a>`;
-    }
-    return `<span class="competitor${bestClass}${missingClass}">${content}</span>`;
+    return `<div class="competitor${bestClass}${missingClass}">
+      ${content}
+      ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Abrir origem</a>` : ""}
+    </div>`;
   }).join("");
+}
+
+async function handleReviewAction(event) {
+  const button = event.target.closest("[data-review-action]");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  const action = button.dataset.reviewAction;
+  const payload = {
+    action,
+    ownUrl: button.dataset.ownUrl,
+    competitorId: button.dataset.competitorId,
+    competitorUrl: button.dataset.competitorUrl || ""
+  };
+
+  if (action === "choose") {
+    openReviewModal(payload);
+    return;
+  }
+
+  if ((action === "confirm" || action === "wrong") && !payload.competitorUrl) {
+    openReviewModal({ ...payload, action: "choose" });
+    return;
+  }
+
+  await saveReviewDecision(payload, button);
+}
+
+async function saveReviewDecision(payload, button) {
+  const original = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Salvando";
+  }
+  try {
+    const response = await fetch("/api/review-decision", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Nao consegui salvar");
+    if (button) button.textContent = "Salvo";
+    setTimeout(loadSavedReport, 900);
+  } catch (error) {
+    window.alert(error.message || "Nao consegui salvar a revisao.");
+    if (button) button.textContent = original;
+  } finally {
+    if (button) {
+      setTimeout(() => {
+        button.disabled = false;
+        button.textContent = original;
+      }, 1200);
+    }
+  }
+}
+
+async function openReviewModal(context) {
+  state.review.modalContext = context;
+  elements.reviewModal.hidden = false;
+  elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: escolher produto`;
+  elements.reviewModalBody.innerHTML = '<div class="empty-state">Carregando candidatos...</div>';
+
+  try {
+    const params = new URLSearchParams({
+      ownUrl: context.ownUrl,
+      competitorId: context.competitorId,
+      limit: "10"
+    });
+    const response = await fetch(`/api/review-candidates?${params}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar candidatos");
+    renderReviewCandidates(payload);
+  } catch (error) {
+    elements.reviewModalBody.innerHTML = `<div class="empty-state">${escapeHtml(error.message || "Falha ao carregar candidatos.")}</div>`;
+  }
+}
+
+function renderReviewCandidates(payload) {
+  const own = payload.ownProduct;
+  const candidates = payload.candidates || [];
+  elements.reviewModalBody.innerHTML = `
+    <div class="review-own">
+      ${own.image ? `<img src="${own.image}" alt="" onerror="this.remove()">` : ""}
+      <div>
+        <strong>${escapeHtml(own.title)}</strong>
+        <span>${escapeHtml(own.platform || "Plataforma")}</span>
+        <small>Nexus: Primaria ${formatPrice(own.licenses?.primary?.price)} | Secundaria ${formatPrice(own.licenses?.secondary?.price)}</small>
+      </div>
+    </div>
+    <div class="candidate-list">
+      ${candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado para este concorrente.</div>'}
+    </div>
+  `;
+}
+
+function renderCandidate(candidate) {
+  const confidence = candidate.review?.confidence || Math.max(0, Math.min(100, Math.round(candidate.score || 0)));
+  const reasons = candidate.review?.reasons?.length ? candidate.review.reasons.join(" · ") : "Candidato encontrado";
+  return `
+    <article class="candidate-card">
+      ${candidate.image ? `<img src="${candidate.image}" alt="" loading="lazy" onerror="this.remove()">` : "<span></span>"}
+      <div>
+        <a href="${candidate.url}" target="_blank" rel="noreferrer">${escapeHtml(candidate.title)}</a>
+        <small>${escapeHtml(candidate.platform || "")}</small>
+        <small>Primaria ${formatPrice(candidate.licenses?.primary?.price)} | Secundaria ${formatPrice(candidate.licenses?.secondary?.price)}</small>
+        <small>IA observadora: ${confidence}% - ${escapeHtml(reasons)}</small>
+      </div>
+      <button type="button" data-modal-action="choose-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Usar este</button>
+      <button type="button" data-modal-action="reject-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Marcar errado</button>
+    </article>
+  `;
+}
+
+async function handleModalAction(event) {
+  const button = event.target.closest("[data-modal-action]");
+  if (!button || !state.review.modalContext) return;
+  const action = button.dataset.modalAction === "choose-candidate" ? "choose" : "wrong";
+  await saveReviewDecision({
+    ...state.review.modalContext,
+    action,
+    competitorUrl: button.dataset.candidateUrl
+  }, button);
+  if (action === "choose") closeReviewModal();
+}
+
+function closeReviewModal() {
+  elements.reviewModal.hidden = true;
+  state.review.modalContext = null;
 }
 
 async function loadSavedReport() {
@@ -333,4 +488,8 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/'/g, "&#39;");
 }
