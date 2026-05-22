@@ -18,3 +18,13 @@
   from = "/api/trigger-refresh"
   to = "/.netlify/functions/trigger-render-refresh"
   status = 200
+
+[[redirects]]
+  from = "/api/review-decision"
+  to = "/.netlify/functions/review-decision"
+  status = 200
+
+[[redirects]]
+  from = "/api/review-candidates"
+  to = "/.netlify/functions/review-candidates"
+  status = 200
