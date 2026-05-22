@@ -9,6 +9,7 @@ const {
 
 const BATCH_SIZE = Math.max(Number(process.env.WORKER_BATCH_SIZE) || 1, 1);
 const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 1, 1);
+const RESUME_ENABLED = process.env.WORKER_RESUME === "1";
 const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item) => item.id).join(","))
   .split(",")
   .map((item) => item.trim())
@@ -69,7 +70,8 @@ async function main() {
 }
 
 function shouldResume(previous, totalItems) {
-  return previous
+  return RESUME_ENABLED
+    && previous
     && previous.totalItems === totalItems
     && Array.isArray(previous.items)
     && previous.items.length > 0
