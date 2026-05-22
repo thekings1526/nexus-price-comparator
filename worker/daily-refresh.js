@@ -15,18 +15,19 @@ const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item)
 
 async function main() {
   const startedAt = new Date().toISOString();
-  await saveReportWithStatus(await baseReport(), {
+  const previous = await baseReport();
+  await saveReportWithStatus(previous, {
     status: "running",
     startedAt,
-    offset: 0,
-    totalItems: 0,
+    offset: previous.items?.length || 0,
+    totalItems: previous.totalItems || 0,
     message: "Lendo catalogo da Nexus"
   });
 
   const catalogItems = await discoverOwnProducts(Number.POSITIVE_INFINITY);
   await saveCatalogItems(catalogItems);
 
-  let merged = {
+  let merged = shouldResume(previous, catalogItems.length) ? previous : {
     schemaVersion: 4,
     generatedAt: new Date().toISOString(),
     source: "worker",
@@ -34,15 +35,21 @@ async function main() {
     totalItems: catalogItems.length,
     items: []
   };
+  const startOffset = Math.min(merged.items?.length || 0, catalogItems.length);
 
-  for (let offset = 0; offset < catalogItems.length; offset += BATCH_SIZE) {
-    const batch = await buildReport({
-      competitors: COMPETITOR_IDS,
-      items: catalogItems,
-      limit: "all",
-      offset,
-      batchSize: BATCH_SIZE
-    });
+  for (let offset = startOffset; offset < catalogItems.length; offset += BATCH_SIZE) {
+    let batch;
+    try {
+      batch = await buildReport({
+        competitors: COMPETITOR_IDS,
+        items: catalogItems,
+        limit: "all",
+        offset,
+        batchSize: BATCH_SIZE
+      });
+    } catch (error) {
+      batch = await recoverBatch(catalogItems, offset, startedAt, error);
+    }
 
     merged = mergeReports(merged, batch);
     await saveReportWithStatus(merged, {
@@ -69,6 +76,53 @@ async function main() {
     items: merged.items.length,
     message: "Atualizacao diaria finalizada"
   });
+}
+
+function shouldResume(previous, totalItems) {
+  return previous
+    && previous.totalItems === totalItems
+    && Array.isArray(previous.items)
+    && previous.items.length > 0
+    && previous.items.length < totalItems;
+}
+
+async function recoverBatch(catalogItems, offset, startedAt, batchError) {
+  console.warn(`Lote ${offset} falhou: ${batchError.message || batchError}`);
+  const items = [];
+  const end = Math.min(offset + BATCH_SIZE, catalogItems.length);
+  for (let index = offset; index < end; index += 1) {
+    try {
+      const itemReport = await buildReport({
+        competitors: COMPETITOR_IDS,
+        items: catalogItems,
+        limit: "all",
+        offset: index,
+        batchSize: 1
+      });
+      items.push(...(itemReport.items || []));
+    } catch (error) {
+      const skipped = catalogItems[index];
+      console.warn(`Produto ignorado ${index + 1}/${catalogItems.length}: ${skipped?.text || skipped?.url || "sem nome"} - ${error.message || error}`);
+      await saveReportWithStatus(await baseReport(), {
+        status: "running",
+        startedAt,
+        offset: index + 1,
+        batchSize: BATCH_SIZE,
+        totalItems: catalogItems.length,
+        message: `Produto ignorado: ${skipped?.text || skipped?.url || "sem nome"}`
+      }).catch(() => null);
+    }
+  }
+  return {
+    schemaVersion: 4,
+    generatedAt: new Date().toISOString(),
+    source: "worker",
+    competitors: COMPETITORS.filter((item) => COMPETITOR_IDS.includes(item.id)),
+    totalItems: catalogItems.length,
+    offset,
+    batchSize: BATCH_SIZE,
+    items
+  };
 }
 
 async function baseReport() {
