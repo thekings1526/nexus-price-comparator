@@ -93,6 +93,25 @@ h1 {
   font-weight: 650;
 }
 
+.run-button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: #2e90fa;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.run-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.cost-warning {
+  color: #fecdca !important;
+}
+
 .progress-track {
   overflow: hidden;
   height: 8px;
