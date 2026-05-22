@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comparador de Precos Nexus</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Nexus Games Digital</p>
+        <h1>Comparador de precos</h1>
+      </div>
+      <section class="sync-card" aria-label="Status da atualizacao">
+        <div>
+          <span class="label">Atualizacao</span>
+          <strong id="syncStatus">Carregando dados</strong>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <span id="syncProgress"></span>
+        </div>
+        <small id="syncDetails">A coleta roda automaticamente uma vez por dia.</small>
+      </section>
+    </header>
+
+    <main class="app-shell">
+      <section class="filters" aria-label="Filtros">
+        <label class="field search-field">
+          <span>Buscar jogo</span>
+          <input id="searchInput" type="search" placeholder="Nome do jogo ou plataforma" />
+        </label>
+
+        <label class="field">
+          <span>Comparacao</span>
+          <select id="statusSelect">
+            <option value="all">Todos os jogos</option>
+            <option value="expensive">Nexus mais caro</option>
+            <option value="close">Mesmo preco ou proximo</option>
+            <option value="cheaper">Nexus mais barato</option>
+            <option value="missing">Sem preco confiavel</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Licenca</span>
+          <select id="licenseSelect">
+            <option value="all">Primaria e secundaria</option>
+            <option value="primary">Primaria</option>
+            <option value="secondary">Secundaria</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Ordenacao</span>
+          <select id="sortSelect">
+            <option value="status">Prioridade de ajuste</option>
+            <option value="gapRisk">Maior diferenca acima</option>
+            <option value="gapAdvantage">Maior diferenca abaixo</option>
+            <option value="mineAsc">Preco Nexus menor primeiro</option>
+            <option value="mineDesc">Preco Nexus maior primeiro</option>
+            <option value="competitorAsc">Concorrente menor primeiro</option>
+            <option value="competitorDesc">Concorrente maior primeiro</option>
+            <option value="nameAsc">Jogo A-Z</option>
+            <option value="nameDesc">Jogo Z-A</option>
+          </select>
+        </label>
+
+        <label class="field compact-field">
+          <span>Margem</span>
+          <input id="thresholdInput" type="number" min="0" max="50" step="0.5" value="2" />
+        </label>
+      </section>
+
+      <section class="summary-grid" id="summaryGrid" aria-label="Resumo"></section>
+
+      <section class="board" aria-label="Tabela de precos">
+        <div class="table-head">
+          <span>Jogo</span>
+          <span>Licenca</span>
+          <span>Nexus</span>
+          <span>Menor concorrente</span>
+          <span>Diferenca</span>
+          <span>Concorrentes</span>
+        </div>
+        <div id="rows" class="rows"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
