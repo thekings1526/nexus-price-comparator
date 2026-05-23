@@ -143,11 +143,50 @@ h1 {
   grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(170px, 1fr)) 120px;
   gap: 12px;
   align-items: end;
+}
+
+.control-panel,
+.board {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.control-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.section-head,
+.board-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+}
+
+.section-head h2,
+.board-header h2 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.section-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+#resultsCount,
+#boardMeta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: right;
 }
 
 .field {
@@ -222,16 +261,18 @@ h1 {
 
 .board {
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+}
+
+.board-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
 }
 
 .table-head,
 .price-row {
   display: grid;
-  grid-template-columns: minmax(300px, 1.22fr) 86px 108px 142px 100px minmax(380px, 1.45fr);
+  grid-template-columns: minmax(320px, 1.24fr) 88px 116px 150px 110px minmax(420px, 1.55fr);
   gap: 12px;
   align-items: center;
 }
@@ -251,13 +292,30 @@ h1 {
 }
 
 .price-row {
-  min-height: 92px;
-  padding: 12px 14px;
+  min-height: 112px;
+  padding: 14px 16px;
   border-top: 1px solid var(--line);
+  border-left: 5px solid transparent;
 }
 
 .price-row:hover {
   background: #fbfcfe;
+}
+
+.status-row-expensive {
+  border-left-color: var(--red);
+}
+
+.status-row-close {
+  border-left-color: var(--amber);
+}
+
+.status-row-cheaper {
+  border-left-color: var(--green);
+}
+
+.status-row-missing {
+  border-left-color: var(--slate);
 }
 
 .game-cell {
@@ -269,8 +327,8 @@ h1 {
 }
 
 .game-cell img {
-  width: 54px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--slate-soft);
@@ -346,6 +404,32 @@ h1 {
   font-weight: 850;
 }
 
+.cell-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cell-stack small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.cell-label {
+  display: none;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.competitor-area {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .diff.positive {
   color: var(--red);
 }
@@ -366,11 +450,12 @@ h1 {
 
 .competitor {
   display: grid;
-  gap: 4px;
-  min-height: 76px;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 5px;
+  min-height: 104px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px;
+  padding: 9px;
   background: var(--surface-alt);
   text-decoration: none;
 }
@@ -389,6 +474,13 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.competitor-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  align-items: center;
 }
 
 .competitor-name {
@@ -411,6 +503,7 @@ h1 {
 
 .review-pill {
   margin-top: 2px;
+  white-space: normal !important;
 }
 
 .review-confirmed {
@@ -437,13 +530,13 @@ h1 {
 .review-actions button,
 .candidate-card button,
 .icon-button {
-  min-height: 30px;
+  min-height: 32px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   color: var(--text);
   cursor: pointer;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 850;
 }
 
@@ -465,6 +558,7 @@ h1 {
   font-size: 0.68rem;
   font-weight: 800;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .modal-backdrop {
@@ -639,8 +733,16 @@ h1 {
   }
 
   .game-cell,
-  .competitors {
+  .competitor-area {
     grid-column: 1 / -1;
+  }
+
+  .cell-label {
+    display: inline;
+  }
+
+  .competitors {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -648,8 +750,16 @@ h1 {
   .topbar,
   .filters,
   .summary-grid,
-  .price-row {
+  .price-row,
+  .section-head,
+  .board-header {
     grid-template-columns: 1fr;
+  }
+
+  .section-head,
+  .board-header {
+    display: grid;
+    align-items: start;
   }
 
   .topbar {
@@ -661,7 +771,12 @@ h1 {
   }
 
   .competitors {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  #resultsCount,
+  #boardMeta {
+    text-align: left;
   }
 
   .candidate-card {
