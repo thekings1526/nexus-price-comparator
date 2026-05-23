@@ -1,5 +1,5 @@
 :root {
-  --bg: #f4f6f8;
+  --bg: #eef2f6;
   --surface: #ffffff;
   --surface-alt: #f8fafc;
   --text: #172033;
@@ -15,7 +15,7 @@
   --red-soft: #fef3f2;
   --amber-soft: #fffaeb;
   --slate-soft: #f2f4f7;
-  --shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
 }
 
 * {
@@ -49,7 +49,7 @@ a {
   grid-template-columns: minmax(220px, 1fr) minmax(320px, 520px);
   gap: 24px;
   align-items: center;
-  padding: 22px 28px;
+  padding: 24px 30px;
   background: #101828;
   color: #fff;
 }
@@ -134,8 +134,8 @@ h1 {
 
 .app-shell {
   display: grid;
-  gap: 16px;
-  padding: 18px;
+  gap: 14px;
+  padding: 16px;
 }
 
 .filters {
@@ -145,7 +145,7 @@ h1 {
   align-items: end;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -168,7 +168,7 @@ h1 {
   min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: #fbfcfe;
   color: var(--text);
   padding: 0 11px;
 }
@@ -188,7 +188,7 @@ h1 {
   gap: 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px 14px;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -231,7 +231,7 @@ h1 {
 .table-head,
 .price-row {
   display: grid;
-  grid-template-columns: minmax(300px, 1.2fr) 96px 104px 134px 104px minmax(360px, 1.35fr);
+  grid-template-columns: minmax(300px, 1.22fr) 86px 108px 142px 100px minmax(380px, 1.45fr);
   gap: 12px;
   align-items: center;
 }
@@ -251,7 +251,7 @@ h1 {
 }
 
 .price-row {
-  min-height: 86px;
+  min-height: 92px;
   padding: 12px 14px;
   border-top: 1px solid var(--line);
 }
@@ -361,16 +361,16 @@ h1 {
 .competitors {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .competitor {
   display: grid;
-  gap: 2px;
-  min-height: 46px;
+  gap: 4px;
+  min-height: 76px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 7px 8px;
+  padding: 8px;
   background: var(--surface-alt);
   text-decoration: none;
 }
@@ -422,21 +422,22 @@ h1 {
 }
 
 .review-auto-medium,
-.review-needs-review {
+.review-needs-review,
+.review-missing-today {
   color: var(--amber) !important;
 }
 
 .review-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 4px;
-  margin-top: 5px;
+  margin-top: 4px;
 }
 
 .review-actions button,
 .candidate-card button,
 .icon-button {
-  min-height: 28px;
+  min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -444,6 +445,13 @@ h1 {
   cursor: pointer;
   font-size: 0.68rem;
   font-weight: 850;
+}
+
+.review-actions button[data-review-action="choose"],
+.candidate-card button[data-modal-action="choose-candidate"] {
+  border-color: #b2ddff;
+  background: var(--blue-soft);
+  color: var(--blue);
 }
 
 .review-actions button:disabled,
@@ -472,7 +480,7 @@ h1 {
 .review-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(980px, 100%);
+  width: min(1060px, 100%);
   max-height: min(760px, calc(100vh - 36px));
   border-radius: 8px;
   background: var(--surface);
@@ -512,6 +520,43 @@ h1 {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.review-search {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.review-search input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: #fbfcfe;
+}
+
+.review-search button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.review-search button[type="submit"] {
+  border-color: #b2ddff;
+  background: var(--blue-soft);
+  color: var(--blue);
 }
 
 .review-own,
@@ -621,6 +666,10 @@ h1 {
 
   .candidate-card {
     grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .review-search {
+    grid-template-columns: 1fr;
   }
 
   .candidate-card button {
