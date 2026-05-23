@@ -6,7 +6,8 @@ exports.handler = async (event) => {
     const payload = await getReviewCandidates({
       ownUrl: params.ownUrl,
       competitorId: params.competitorId,
-      limit: params.limit || 10
+      limit: params.limit || 10,
+      query: params.query || ""
     });
     return json(payload);
   } catch (error) {
