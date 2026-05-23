@@ -17,6 +17,12 @@ const COMPETITORS = [
 
 let lastFetchAt = 0;
 let fetchQueue = Promise.resolve();
+const CACHE_TTL = {
+  report: 10 * 1000,
+  catalog: 30 * 60 * 1000,
+  parsedProduct: 30 * 60 * 1000
+};
+const memoryCache = new Map();
 
 exports.handler = async (event) => {
   try {
@@ -161,6 +167,7 @@ async function saveReport(report) {
   await store.setJSON("latest-report", report, {
     metadata: { generatedAt: report.generatedAt, items: report.items.length }
   });
+  memoryCache.set("latest-report", { value: report, expiresAt: Date.now() + CACHE_TTL.report });
   await store.setJSON("refresh-status", {
     status: "ready",
     generatedAt: report.generatedAt,
@@ -174,6 +181,7 @@ async function saveReportWithStatus(report, status) {
   await store.setJSON("latest-report", report, {
     metadata: { generatedAt: report.generatedAt, items: report.items.length }
   });
+  memoryCache.set("latest-report", { value: report, expiresAt: Date.now() + CACHE_TTL.report });
   await store.setJSON("refresh-status", {
     updatedAt: new Date().toISOString(),
     ...status
@@ -181,8 +189,10 @@ async function saveReportWithStatus(report, status) {
 }
 
 async function getSavedReport() {
-  const store = await getBlobStore();
-  return store.get("latest-report", { type: "json", consistency: "strong" });
+  return cachedValue("latest-report", CACHE_TTL.report, async () => {
+    const store = await getBlobStore();
+    return store.get("latest-report", { type: "json", consistency: "strong" });
+  });
 }
 
 async function saveCatalogItems(items) {
@@ -548,6 +558,11 @@ async function discoverCompetitorCatalogs(competitors = COMPETITORS) {
 }
 
 async function discoverCompetitorCatalog(competitor) {
+  const cacheKey = `competitor-catalog:${competitor.id}`;
+  return cachedValue(cacheKey, CACHE_TTL.catalog, () => discoverCompetitorCatalogFresh(competitor));
+}
+
+async function discoverCompetitorCatalogFresh(competitor) {
   const sitemapUrls = await discoverProductSitemapUrls(competitor.baseUrl);
   const links = [];
   for (const sitemapUrl of sitemapUrls) {
@@ -569,29 +584,31 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
   if (!competitor) throw new Error("Concorrente invalido");
   if (!ownUrl) throw new Error("Produto Nexus obrigatorio");
 
-  const [ownPage, overrides] = await Promise.all([
-    fetchProduct(ownUrl),
+  const [ownProduct, overrides] = await Promise.all([
+    getOwnProductForReview(ownUrl),
     getReviewOverrides().catch(() => defaultReviewOverrides())
   ]);
-  const ownProduct = parseProductPage(ownPage.html, ownPage.url);
   const decision = getReviewDecision(overrides, ownProduct.url, competitor.id);
   const catalog = await discoverCompetitorCatalog(competitor);
   const manualQuery = cleanSearchQuery(query);
   const ownPlatform = normalize(ownProduct.platform || "");
+  const normalizedLimit = Math.max(Number(limit) || 10, 1);
+  const catalogPool = manualQuery ? catalog.filter((link) => queryCandidateScore(link, manualQuery) > 0) : catalog;
 
   const searchLinks = new Map();
-  for (const searchTerm of manualQuery ? [manualQuery] : buildSearchQueries(ownProduct)) {
-    try {
-      const searchUrl = new URL("buscar", competitor.baseUrl);
-      searchUrl.searchParams.set("q", searchTerm);
-      const search = await fetchHtml(searchUrl.toString());
-      for (const link of extractProductLinks(search.html, competitor.baseUrl)) searchLinks.set(link.url, link);
-    } catch {
-      // Search is only an assist for the review modal.
+  if (manualQuery && catalogPool.length < Math.min(normalizedLimit, 6)) {
+    for (const searchTerm of [manualQuery]) {
+      try {
+        const searchUrl = new URL("buscar", competitor.baseUrl);
+        searchUrl.searchParams.set("q", searchTerm);
+        const search = await fetchHtml(searchUrl.toString());
+        for (const link of extractProductLinks(search.html, competitor.baseUrl)) searchLinks.set(link.url, link);
+      } catch {
+        // Search is only an assist for the review modal.
+      }
     }
   }
 
-  const catalogPool = manualQuery ? catalog.filter((link) => queryCandidateScore(link, manualQuery) > 0) : catalog;
   const ranked = uniqueBy([...searchLinks.values(), ...catalogPool], (item) => item.url)
     .filter((link) => !decision?.rejectedUrls?.[normalizeReviewUrl(link.url)])
     .map((link) => {
@@ -602,15 +619,14 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
     })
     .filter((link) => manualQuery ? link.searchScore > 0 : link.score >= 4)
     .sort((a, b) => (b.searchScore - a.searchScore) || (b.score - a.score))
-    .slice(0, Math.max(Number(limit) || 10, 1));
+    .slice(0, normalizedLimit);
 
-  const candidates = [];
-  for (const link of ranked) {
+  const candidates = (await mapLimit(ranked, 4, async (link) => {
     try {
-      const product = parseProductPage((await fetchProduct(link.url)).html, link.url);
+      const product = await getParsedProductForReview(link.url);
       const score = scoreCandidate(product, ownProduct) - reviewPenalty(decision, product.url);
-      if (!manualQuery && score < 4) continue;
-      candidates.push({
+      if (!manualQuery && score < 4) return null;
+      return {
         url: product.url,
         title: product.title,
         image: product.image,
@@ -618,11 +634,11 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
         licenses: product.licenses,
         score,
         review: buildReviewInsight(ownProduct, competitor.id, product, { source: "candidate", decision }, overrides)
-      });
+      };
     } catch {
-      // Keep other candidates available.
+      return null;
     }
-  }
+  })).filter(Boolean);
 
   return {
     ownProduct: {
@@ -636,6 +652,60 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
     decision,
     candidates: candidates.sort((a, b) => b.score - a.score)
   };
+}
+
+async function getOwnProductForReview(ownUrl) {
+  const normalizedOwnUrl = normalizeReviewUrl(ownUrl);
+  try {
+    const report = await getSavedReport();
+    const item = (report?.items || []).find((product) => normalizeReviewUrl(product.url) === normalizedOwnUrl);
+    if (item) return normalizeManualItem(item);
+  } catch {
+    // Fall back to the live page if the saved report is unavailable.
+  }
+  const ownPage = await fetchProduct(ownUrl);
+  return parseProductPage(ownPage.html, ownPage.url);
+}
+
+async function getParsedProductForReview(url) {
+  return cachedValue(`parsed-review-product:${normalizeReviewUrl(url)}`, CACHE_TTL.parsedProduct, async () => {
+    const page = await fetchProduct(url);
+    return parseProductPage(page.html, page.url);
+  });
+}
+
+async function cachedValue(key, ttlMs, loader) {
+  const now = Date.now();
+  const current = memoryCache.get(key);
+  if (current?.value !== undefined && current.expiresAt > now) return current.value;
+  if (current?.promise) return current.promise;
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      memoryCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+      return value;
+    })
+    .catch((error) => {
+      memoryCache.delete(key);
+      throw error;
+    });
+  memoryCache.set(key, { promise, expiresAt: now + ttlMs });
+  return promise;
+}
+
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function queryCandidateScore(link, query) {
