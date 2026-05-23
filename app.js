@@ -202,36 +202,39 @@ function renderRows(entries) {
     }[entry.status];
 
     return `
-      <article class="price-row status-row-${entry.status}">
-        <div class="game-cell">
-          ${entry.item.image ? `<img src="${entry.item.image}" alt="" loading="lazy" onerror="this.remove()">` : `<img alt="">`}
-          <div>
-            <a class="game-title" href="${entry.item.url || "#"}" target="_blank" rel="noreferrer">${escapeHtml(entry.item.title)}</a>
-            <div class="game-meta">
-              <span>${entry.item.platform || "Plataforma"}</span>
-              <span class="status-tag status-${entry.status}">${statusLabel}</span>
+      <article class="price-row comparison-card status-row-${entry.status}">
+        <div class="card-main">
+          <div class="game-cell">
+            ${entry.item.image ? `<img src="${entry.item.image}" alt="" loading="lazy" onerror="this.remove()">` : `<img alt="">`}
+            <div>
+              <a class="game-title" href="${entry.item.url || "#"}" target="_blank" rel="noreferrer">${escapeHtml(entry.item.title)}</a>
+              <div class="game-meta">
+                <span>${entry.item.platform || "Plataforma"}</span>
+                <span class="tag ${licenseClass}">${licenseLabel}</span>
+                <span class="status-tag status-${entry.status}">${statusLabel}</span>
+              </div>
             </div>
           </div>
         </div>
-        <div class="cell-stack">
-          <span class="cell-label">Licenca</span>
-          <span class="tag ${licenseClass}">${licenseLabel}</span>
+
+        <div class="price-strip">
+          <div class="price-box">
+            <span>Preco Nexus</span>
+            <strong>${formatPrice(entry.myPrice)}</strong>
+          </div>
+          <div class="price-box">
+            <span>Melhor concorrente</span>
+            <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
+            ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
+          </div>
+          <div class="price-box price-box-diff">
+            <span>Variacao</span>
+            <strong class="diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</strong>
+          </div>
         </div>
-        <div class="cell-stack">
-          <span class="cell-label">Nexus</span>
-          <strong class="money">${formatPrice(entry.myPrice)}</strong>
-        </div>
-        <div class="cell-stack">
-          <span class="cell-label">Melhor concorrente</span>
-          <strong class="money">${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
-          ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
-        </div>
-        <div class="cell-stack">
-          <span class="cell-label">Variacao</span>
-          <strong class="money diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</strong>
-        </div>
+
         <div class="competitor-area">
-          <span class="cell-label">Concorrentes</span>
+          <span class="competitor-area-title">Concorrentes</span>
           <div class="competitors">${renderCompetitors(entry)}</div>
         </div>
       </article>
@@ -334,7 +337,9 @@ function applyLocalReviewDecision(payload) {
   const item = (state.report.items || []).find((product) => product.url === payload.ownUrl);
   if (!item) return;
   Object.values(item.licenses || {}).forEach((license) => {
-    const competitor = license.competitors?.[payload.competitorId];
+    license.competitors = license.competitors || {};
+    const competitor = license.competitors[payload.competitorId] || {};
+    license.competitors[payload.competitorId] = competitor;
     if (!competitor) return;
     competitor.review = {
       ...(competitor.review || {}),
