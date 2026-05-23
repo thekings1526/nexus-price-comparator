@@ -47,9 +47,13 @@ async function main() {
     .map(([id, items]) => `${id}: ${items.length}`)
     .join(", ");
 
-  let merged = shouldResume(previous, catalogItems.length) ? previous : emptyReport(catalogItems.length, selectedCompetitors);
-  const startOffset = Math.min(merged.items?.length || 0, catalogItems.length);
-  const itemsToProcess = catalogItems.slice(startOffset);
+  const resume = shouldResume(previous, catalogItems.length);
+  let merged = resume ? previous : emptyReport(catalogItems.length, selectedCompetitors);
+  const processedKeys = new Set((merged.items || []).map(reportItemKey).filter(Boolean));
+  const itemsToProcess = resume
+    ? catalogItems.filter((item) => !processedKeys.has(catalogItemKey(item)))
+    : catalogItems;
+  const startOffset = resume ? catalogItems.length - itemsToProcess.length : 0;
 
   if (startOffset > 0) {
     await saveReportWithStatus(merged, {
@@ -182,15 +186,34 @@ async function baseReport() {
 }
 
 function mergeReports(previous, batch) {
-  const byId = new Map((previous.items || []).map((item) => [item.id, item]));
-  for (const item of batch.items || []) byId.set(item.id, item);
+  const byProductUrl = new Map((previous.items || []).map((item) => [reportItemKey(item), item]));
+  for (const item of batch.items || []) byProductUrl.set(reportItemKey(item), item);
   return {
     ...previous,
     generatedAt: batch.generatedAt,
     competitors: batch.competitors,
     totalItems: batch.totalItems,
-    items: Array.from(byId.values())
+    items: Array.from(byProductUrl.values())
   };
+}
+
+function reportItemKey(item) {
+  return normalizeReportUrl(item?.url) || item?.id || "";
+}
+
+function catalogItemKey(item) {
+  return normalizeReportUrl(item?.url) || item?.id || "";
+}
+
+function normalizeReportUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return String(value || "").trim();
+  }
 }
 
 if (require.main === module) {
