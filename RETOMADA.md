@@ -70,6 +70,7 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Remodelagem publicada no Netlify no deploy `6a11fb0e67b486ae1bfb32e0`.
 - Depois da revisao visual, a lista deixou de parecer tabela e passou a usar cards de analise por produto/licenca: bloco do produto, faixa de precos e bloco de concorrentes. Deploy Netlify `6a11fd29749b3fae9a63493b`.
 - A confirmacao manual no painel atualiza todas as licencas do mesmo produto/concorrente no estado local imediatamente. Como o override salvo e por produto + concorrente, o worker tambem aplica a confirmacao para primaria e secundaria nas proximas leituras.
+- Em 23/05/2026 foi corrigido o comportamento de tempo real dos botoes de revisao: o painel agora guarda as decisoes locais em `nexus-review-decisions` e reaplica por cima do relatorio quando o auto-refresh carrega dados antigos. O botao `Usar este` tambem leva os dados do candidato escolhido para atualizar o card na hora.
 
 ## Arquivos principais
 
