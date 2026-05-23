@@ -266,8 +266,8 @@ function renderCompetitors(entry) {
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
-    const confirmed = review?.status === "confirmed";
-    const actionMarkup = confirmed ? "" : `
+    const manualState = manualReviewState(entry.item.url, competitor.id, review);
+    const actionMarkup = manualState.done ? renderResolvedReviewAction(entry, competitor, value, manualState) : `
       <span class="review-actions">
         ${value?.url ? `<button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value.url)}">Produto correto</button>` : ""}
         <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Trocar produto</button>
@@ -287,6 +287,29 @@ function renderCompetitors(entry) {
       ${content}
     </div>`;
   }).join("");
+}
+
+function renderResolvedReviewAction(entry, competitor, value, manualState) {
+  if (manualState.status === "missing-today" || manualState.status === "wrong") {
+    return `
+      <button class="review-mini-action" type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Revisar</button>
+    `;
+  }
+  return "";
+}
+
+function manualReviewState(ownUrl, competitorId, review) {
+  const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
+  if (local && local.action !== "wrong") {
+    return {
+      done: true,
+      status: local.action === "missing-today" ? "missing-today" : "confirmed"
+    };
+  }
+  if (review?.status === "confirmed" || review?.status === "missing-today") {
+    return { done: true, status: review.status };
+  }
+  return { done: false, status: review?.status || "" };
 }
 
 async function handleReviewAction(event) {
