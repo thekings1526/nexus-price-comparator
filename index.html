@@ -27,56 +27,73 @@
     </header>
 
     <main class="app-shell">
-      <section class="filters" aria-label="Filtros">
-        <label class="field search-field">
-          <span>Produto</span>
-          <input id="searchInput" type="search" placeholder="Nome do jogo ou plataforma" />
-        </label>
+      <section class="control-panel" aria-label="Filtros">
+        <div class="section-head">
+          <div>
+            <span class="section-label">Analise</span>
+            <h2>Filtros e ordenacao</h2>
+          </div>
+          <strong id="resultsCount">0 resultados</strong>
+        </div>
 
-        <label class="field">
-          <span>Situacao</span>
-          <select id="statusSelect">
-            <option value="all">Todos</option>
-            <option value="expensive">Nexus acima do mercado</option>
-            <option value="close">Preco alinhado</option>
-            <option value="cheaper">Nexus abaixo do mercado</option>
-            <option value="missing">Sem referencia confiavel</option>
-          </select>
-        </label>
+        <div class="filters">
+          <label class="field search-field">
+            <span>Produto</span>
+            <input id="searchInput" type="search" placeholder="Nome do jogo ou plataforma" />
+          </label>
 
-        <label class="field">
-          <span>Licenca</span>
-          <select id="licenseSelect">
-            <option value="all">Primaria e secundaria</option>
-            <option value="primary">Primaria</option>
-            <option value="secondary">Secundaria</option>
-          </select>
-        </label>
+          <label class="field">
+            <span>Situacao</span>
+            <select id="statusSelect">
+              <option value="all">Todos</option>
+              <option value="expensive">Nexus acima do mercado</option>
+              <option value="close">Preco alinhado</option>
+              <option value="cheaper">Nexus abaixo do mercado</option>
+              <option value="missing">Sem referencia confiavel</option>
+            </select>
+          </label>
 
-        <label class="field">
-          <span>Ordenar por</span>
-          <select id="sortSelect">
-            <option value="status">Prioridade de ajuste</option>
-            <option value="gapRisk">Maior risco de preco alto</option>
-            <option value="gapAdvantage">Maior vantagem de preco</option>
-            <option value="mineAsc">Menor preco Nexus</option>
-            <option value="mineDesc">Maior preco Nexus</option>
-            <option value="competitorAsc">Menor preco concorrente</option>
-            <option value="competitorDesc">Maior preco concorrente</option>
-            <option value="nameAsc">Jogo A-Z</option>
-            <option value="nameDesc">Jogo Z-A</option>
-          </select>
-        </label>
+          <label class="field">
+            <span>Licenca</span>
+            <select id="licenseSelect">
+              <option value="all">Primaria e secundaria</option>
+              <option value="primary">Primaria</option>
+              <option value="secondary">Secundaria</option>
+            </select>
+          </label>
 
-        <label class="field compact-field">
-          <span>Margem R$</span>
-          <input id="thresholdInput" type="number" min="0" max="50" step="0.5" value="2" />
-        </label>
+          <label class="field">
+            <span>Ordenar por</span>
+            <select id="sortSelect">
+              <option value="status">Prioridade de ajuste</option>
+              <option value="gapRisk">Maior risco de preco alto</option>
+              <option value="gapAdvantage">Maior vantagem de preco</option>
+              <option value="mineAsc">Menor preco Nexus</option>
+              <option value="mineDesc">Maior preco Nexus</option>
+              <option value="competitorAsc">Menor preco concorrente</option>
+              <option value="competitorDesc">Maior preco concorrente</option>
+              <option value="nameAsc">Jogo A-Z</option>
+              <option value="nameDesc">Jogo Z-A</option>
+            </select>
+          </label>
+
+          <label class="field compact-field">
+            <span>Margem R$</span>
+            <input id="thresholdInput" type="number" min="0" max="50" step="0.5" value="2" />
+          </label>
+        </div>
       </section>
 
       <section class="summary-grid" id="summaryGrid" aria-label="Resumo"></section>
 
       <section class="board" aria-label="Tabela de precos">
+        <div class="board-header">
+          <div>
+            <span class="section-label">Produtos</span>
+            <h2>Comparacao por licenca</h2>
+          </div>
+          <span id="boardMeta">Carregando</span>
+        </div>
         <div class="table-head">
           <span>Produto</span>
           <span>Tipo</span>
