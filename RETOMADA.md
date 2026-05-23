@@ -73,6 +73,7 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Em 23/05/2026 foi corrigido o comportamento de tempo real dos botoes de revisao: o painel agora guarda as decisoes locais em `nexus-review-decisions` e reaplica por cima do relatorio quando o auto-refresh carrega dados antigos. O botao `Usar este` tambem leva os dados do candidato escolhido para atualizar o card na hora.
 - Em 23/05/2026 foi feita a limpeza visual das revisoes resolvidas: apos `Produto correto`, `Usar este` ou `Nao tem no concorrente hoje`, o bloco grande de botoes some. Confirmado/trocado fica sem botao; ausencia temporaria fica apenas com um botao pequeno `Revisar`.
 - Em 23/05/2026 foi corrigido o calculo do painel apos revisao manual: produto marcado como incorreto ou ausente hoje deixa de entrar no `Melhor concorrente`, na `Variacao`, no status e nas ordenacoes. A marcacao `incorreto` e especifica para o link rejeitado, entao outro link futuro do mesmo concorrente pode voltar a ser usado normalmente. O card passa a indicar `Ignorado no calculo` e o selo `Marcado incorreto` fica destacado.
+- Publicacao validada no Netlify deploy `6a12059d1be7ddb8fdecb3cf`: painel abriu com 2076 cards, APIs `/api/report` e `/api/review-candidates` responderam JSON, sem erros de console, e a logica publicada foi testada com cenario simulado onde o concorrente incorreto sai da primaria e secundaria.
 
 ## Arquivos principais
 
