@@ -53,7 +53,9 @@ async function buildReport(options = {}) {
   const items = [];
   for (const tracked of trackedItems) {
     const ownProduct = await getOwnProduct(tracked, ownProductCache);
-    if (!ownProduct || !ownProduct.title) continue;
+    if (!ownProduct || !ownProduct.title) {
+      throw new Error(`Produto Nexus sem titulo legivel: ${tracked?.url || tracked?.text || "item desconhecido"}`);
+    }
 
     const licenses = {};
     for (const license of ["primary", "secondary"]) {
