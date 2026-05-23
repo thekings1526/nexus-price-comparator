@@ -66,6 +66,8 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - A comparacao de versoes ficou mais rigida: edicoes/pacotes como `Deluxe`, `Ultimate`, `Anthology`, `Premium`, `Pack`, `Bundle`, `Collection`, `Trilogy`, `Gold`, `Complete`, `Definitive` e similares precisam bater entre Nexus e concorrente.
 - A tela foi reorganizada com nomes mais diretos nos filtros, resumo e colunas: `Situacao`, `Preco alinhado`, `Sem referencia`, `Melhor concorrente`, `Variacao`, etc.
 - Alteracoes publicadas no Netlify no deploy `6a11f88c0d4e8999b5605e82`. A nova coleta foi disparada no Render em 23/05/2026 para recalcular a base com as regras de versao/pacote.
+- Ainda em 23/05/2026 foi feita uma remodelagem visual mais estrutural: painel de filtros com cabecalho, contador de resultados, cabecalho da lista, cards de concorrentes mais organizados, destaque lateral por situacao e leitura mais clara de Nexus / melhor concorrente / variacao.
+- Remodelagem publicada no Netlify no deploy `6a11fb0e67b486ae1bfb32e0`.
 
 ## Arquivos principais
 
