@@ -443,9 +443,7 @@ async function findCompetitorProductForReport(competitor, ownProduct, catalog, p
   if (decision?.confirmedUrl) {
     try {
       const manualProduct = await getParsedCompetitorProduct(decision.confirmedUrl, parsedCache);
-      if (scoreCandidate(manualProduct, ownProduct) >= 8) {
-        return { match: manualProduct, source: "manual-confirmed", decision };
-      }
+      return { match: manualProduct, source: "manual-confirmed", decision };
     } catch {
       // If the saved URL disappeared, fall through to automatic matching.
     }
@@ -566,7 +564,7 @@ async function discoverCompetitorCatalog(competitor) {
   return uniqueBy(links, (item) => item.url);
 }
 
-async function getReviewCandidates({ ownUrl, competitorId, limit = 10 }) {
+async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "" }) {
   const competitor = COMPETITORS.find((item) => item.id === competitorId);
   if (!competitor) throw new Error("Concorrente invalido");
   if (!ownUrl) throw new Error("Produto Nexus obrigatorio");
@@ -578,12 +576,14 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10 }) {
   const ownProduct = parseProductPage(ownPage.html, ownPage.url);
   const decision = getReviewDecision(overrides, ownProduct.url, competitor.id);
   const catalog = await discoverCompetitorCatalog(competitor);
+  const manualQuery = cleanSearchQuery(query);
+  const ownPlatform = normalize(ownProduct.platform || "");
 
   const searchLinks = new Map();
-  for (const query of buildSearchQueries(ownProduct)) {
+  for (const searchTerm of manualQuery ? [manualQuery] : buildSearchQueries(ownProduct)) {
     try {
       const searchUrl = new URL("buscar", competitor.baseUrl);
-      searchUrl.searchParams.set("q", query);
+      searchUrl.searchParams.set("q", searchTerm);
       const search = await fetchHtml(searchUrl.toString());
       for (const link of extractProductLinks(search.html, competitor.baseUrl)) searchLinks.set(link.url, link);
     } catch {
@@ -591,10 +591,17 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10 }) {
     }
   }
 
-  const ranked = uniqueBy([...catalog, ...searchLinks.values()], (item) => item.url)
-    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct, { preview: true }) - reviewPenalty(decision, link.url) }))
-    .filter((link) => link.score >= 4)
-    .sort((a, b) => b.score - a.score)
+  const catalogPool = manualQuery ? catalog.filter((link) => queryCandidateScore(link, manualQuery) > 0) : catalog;
+  const ranked = uniqueBy([...searchLinks.values(), ...catalogPool], (item) => item.url)
+    .filter((link) => !decision?.rejectedUrls?.[normalizeReviewUrl(link.url)])
+    .map((link) => {
+      const matchScore = scoreCandidate(link, ownProduct, { preview: true }) - reviewPenalty(decision, link.url);
+      const platformBoost = manualQuery && ownPlatform && platformsIn(normalize(`${link.text || ""} ${link.title || ""} ${link.url || ""}`)).has(ownPlatform) ? 3 : 0;
+      const searchScore = manualQuery ? queryCandidateScore(link, manualQuery) + platformBoost : 0;
+      return { ...link, score: matchScore, searchScore };
+    })
+    .filter((link) => manualQuery ? link.searchScore > 0 : link.score >= 4)
+    .sort((a, b) => (b.searchScore - a.searchScore) || (b.score - a.score))
     .slice(0, Math.max(Number(limit) || 10, 1));
 
   const candidates = [];
@@ -602,6 +609,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10 }) {
     try {
       const product = parseProductPage((await fetchProduct(link.url)).html, link.url);
       const score = scoreCandidate(product, ownProduct) - reviewPenalty(decision, product.url);
+      if (!manualQuery && score < 4) continue;
       candidates.push({
         url: product.url,
         title: product.title,
@@ -628,6 +636,13 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10 }) {
     decision,
     candidates: candidates.sort((a, b) => b.score - a.score)
   };
+}
+
+function queryCandidateScore(link, query) {
+  const queryTokens = gameTokens(query);
+  if (!queryTokens.length) return 0;
+  const haystack = comparableTokenSet(gameTokens(`${link.text || ""} ${link.title || ""} ${link.url || ""}`));
+  return queryTokens.reduce((score, token) => score + (haystack.has(token) ? (token.length >= 4 ? 2 : 1) : 0), 0);
 }
 
 async function discoverProductSitemapUrls(baseUrl) {
@@ -890,6 +905,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasEditionMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasConflictingExtraEdition(ownTitleTokens, candidateTitleTokens)) return 0;
 
   let tokenScore = 0;
@@ -993,6 +1009,16 @@ function editionCompatibilityScore(ownTokens, candidateTokens) {
   const extraCandidate = candidateEditions.filter((token) => !ownTokens.includes(token) && token !== "standard");
   score -= extraCandidate.length * 10;
   return score;
+}
+
+function hasEditionMismatch(ownTokens, candidateTokens) {
+  const ownSet = new Set(ownTokens);
+  const candidateSet = new Set(candidateTokens);
+  const ownEditions = Array.from(ownSet).filter((token) => STRICT_VERSION_TOKENS.has(token));
+  const candidateEditions = Array.from(candidateSet).filter((token) => STRICT_VERSION_TOKENS.has(token));
+  const missingInCandidate = ownEditions.some((token) => !candidateSet.has(token));
+  const extraInCandidate = candidateEditions.some((token) => !ownSet.has(token));
+  return missingInCandidate || extraInCandidate;
 }
 
 function hasConflictingExtraEdition(ownTokens, candidateTokens) {
@@ -1285,7 +1311,13 @@ const EDITION_TOKENS = new Set([
   "remastered",
   "champions",
   "premium",
-  "standard"
+  "standard",
+  "anthology",
+  "pacote",
+  "pack",
+  "duo",
+  "duplo",
+  "double"
 ]);
 
 const CALL_OF_DUTY_BASE_TOKENS = new Set(["call", "duty", "cod"]);
@@ -1305,7 +1337,37 @@ const STRONG_EXTRA_EDITION_TOKENS = new Set([
   "remaster",
   "remastered",
   "champions",
-  "premium"
+  "premium",
+  "anthology",
+  "pacote",
+  "pack",
+  "duo",
+  "duplo",
+  "double"
+]);
+
+const STRICT_VERSION_TOKENS = new Set([
+  "gold",
+  "ultimate",
+  "deluxe",
+  "complete",
+  "collection",
+  "colecao",
+  "trilogy",
+  "bundle",
+  "legendary",
+  "definitive",
+  "remake",
+  "remaster",
+  "remastered",
+  "champions",
+  "premium",
+  "anthology",
+  "pacote",
+  "pack",
+  "duo",
+  "duplo",
+  "double"
 ]);
 
 const ROMAN_NUMERALS = {
