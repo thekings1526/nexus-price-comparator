@@ -136,7 +136,7 @@ function getEntries() {
     Object.entries(item.licenses || {}).map(([license, payload]) => {
       const competitorPrices = Object.entries(payload.competitors || {})
         .map(([id, value]) => ({ id, ...value }))
-        .filter((value) => typeof value.price === "number");
+        .filter((value) => isCompetitorPriceCountable(item.url, value.id, value));
       const best = competitorPrices.slice().sort((a, b) => a.price - b.price)[0] || null;
       const diff = best && typeof payload.myPrice === "number" ? payload.myPrice - best.price : null;
       return {
@@ -150,6 +150,18 @@ function getEntries() {
       };
     })
   ));
+}
+
+function isCompetitorPriceCountable(ownUrl, competitorId, value) {
+  if (!value || typeof value.price !== "number") return false;
+  const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
+  if (local && shouldApplyStoredDecision(state.report, local)) {
+    if (local.action === "missing-today") return false;
+    if (local.action === "wrong" && sameReviewUrl(local.competitorUrl, value.url)) return false;
+  }
+  if (value.review?.status === "missing-today" || value.review?.status === "wrong") return false;
+  if ((value.review?.reasons || []).some((reason) => /marcou este par como errado/i.test(reason))) return false;
+  return true;
 }
 
 function classify(diff, best) {
@@ -260,9 +272,10 @@ function renderRows(entries) {
 function renderCompetitors(entry) {
   return competitors.map((competitor) => {
     const value = entry.competitorData[competitor.id];
-    const bestClass = entry.best?.id === competitor.id ? " best" : "";
-    const missingClass = value?.price ? "" : " missing";
-    const note = value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
+    const ignored = value && !isCompetitorPriceCountable(entry.item.url, competitor.id, value);
+    const bestClass = !ignored && entry.best?.id === competitor.id ? " best" : "";
+    const missingClass = value?.price && !ignored ? "" : " missing";
+    const note = ignored ? "Fora do calculo" : value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
@@ -278,7 +291,7 @@ function renderCompetitors(entry) {
         <span class="competitor-name">${competitor.name}</span>
         ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Origem</a>` : ""}
       </div>
-      <strong>${value?.price ? formatPrice(value.price) : "Sem preco"}</strong>
+      <strong>${value?.price && !ignored ? formatPrice(value.price) : "Sem preco"}</strong>
       ${note ? `<small>${note}</small>` : ""}
       <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
       ${actionMarkup}
@@ -300,15 +313,16 @@ function renderResolvedReviewAction(entry, competitor, value, manualState) {
 
 function manualReviewState(ownUrl, competitorId, review) {
   const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
-  if (local && local.action !== "wrong") {
+  if (local && shouldApplyStoredDecision(state.report, local)) {
     return {
       done: true,
-      status: local.action === "missing-today" ? "missing-today" : "confirmed"
+      status: local.action === "missing-today" ? "missing-today" : local.action === "wrong" ? "wrong" : "confirmed"
     };
   }
-  if (review?.status === "confirmed" || review?.status === "missing-today") {
+  if (review?.status === "confirmed" || review?.status === "missing-today" || review?.status === "wrong") {
     return { done: true, status: review.status };
   }
+  if ((review?.reasons || []).some((reason) => /marcou este par como errado/i.test(reason))) return { done: true, status: "wrong" };
   return { done: false, status: review?.status || "" };
 }
 
@@ -371,7 +385,6 @@ async function saveReviewDecision(payload, button) {
 }
 
 function applyLocalReviewDecision(payload) {
-  if (payload.action === "wrong") return;
   rememberReviewDecision(payload);
   applyReviewDecisionToReport(state.report, payload);
   storeReport(state.report);
@@ -399,16 +412,21 @@ function applyReviewDecisionToReport(report, payload) {
     const competitor = license.competitors[payload.competitorId] || {};
     license.competitors[payload.competitorId] = competitor;
     if (!competitor) return;
+    const isMissing = payload.action === "missing-today";
+    const isWrong = payload.action === "wrong";
+    if (isWrong && payload.competitorUrl && competitor.url && !sameReviewUrl(payload.competitorUrl, competitor.url)) return;
     const licenseKey = license === item.licenses?.primary ? "primary" : "secondary";
     const candidateLicense = payload.candidate?.licenses?.[licenseKey];
     competitor.review = {
       ...(competitor.review || {}),
-      status: payload.action === "missing-today" ? "missing-today" : "confirmed",
-      confidence: payload.action === "missing-today" ? 1 : 100,
-      label: payload.action === "missing-today" ? "Sem produto hoje" : "Confirmado por voce",
-      reasons: payload.action === "missing-today" ? ["Marcado como ausente nesta revisao"] : ["Vinculo salvo manualmente"]
+      status: isMissing ? "missing-today" : isWrong ? "wrong" : "confirmed",
+      confidence: isMissing || isWrong ? 1 : 100,
+      label: isMissing ? "Sem produto hoje" : isWrong ? "Marcado incorreto" : "Confirmado por voce",
+      reasons: isMissing ? ["Marcado como ausente nesta revisao"] : isWrong ? ["Voce marcou este par como errado"] : ["Vinculo salvo manualmente"]
     };
     if ((payload.action === "choose" || payload.action === "confirm") && payload.competitorUrl) competitor.url = payload.competitorUrl;
+    if (isMissing || isWrong) competitor.available = false;
+    if (!isMissing && !isWrong) competitor.available = true;
     if (payload.candidate) {
       competitor.title = payload.candidate.title || competitor.title;
       competitor.available = candidateLicense?.available ?? competitor.available;
@@ -418,12 +436,34 @@ function applyReviewDecisionToReport(report, payload) {
 }
 
 function applyStoredReviewDecisions(report) {
-  Object.values(state.reviewDecisions || {}).forEach((decision) => applyReviewDecisionToReport(report, decision));
+  Object.values(state.reviewDecisions || {})
+    .filter((decision) => shouldApplyStoredDecision(report, decision))
+    .forEach((decision) => applyReviewDecisionToReport(report, decision));
   return report;
+}
+
+function shouldApplyStoredDecision(report, decision) {
+  if (!report?.generatedAt || !decision?.savedAt) return true;
+  return new Date(report.generatedAt).getTime() <= new Date(decision.savedAt).getTime();
 }
 
 function reviewDecisionKey(ownUrl, competitorId) {
   return `${ownUrl}::${competitorId}`;
+}
+
+function sameReviewUrl(left, right) {
+  return normalizeReviewUrl(left) === normalizeReviewUrl(right);
+}
+
+function normalizeReviewUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return String(value || "").trim().replace(/\/$/, "");
+  }
 }
 
 async function openReviewModal(context, query = "") {
