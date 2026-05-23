@@ -39,6 +39,8 @@ const elements = {
   syncDetails: document.querySelector("#syncDetails"),
   syncProgress: document.querySelector("#syncProgress"),
   runWorkerButton: document.querySelector("#runWorkerButton"),
+  resultsCount: document.querySelector("#resultsCount"),
+  boardMeta: document.querySelector("#boardMeta"),
   searchInput: document.querySelector("#searchInput"),
   statusSelect: document.querySelector("#statusSelect"),
   licenseSelect: document.querySelector("#licenseSelect"),
@@ -179,6 +181,11 @@ function renderSummary(entries) {
 }
 
 function renderRows(entries) {
+  elements.resultsCount.textContent = `${entries.length} ${entries.length === 1 ? "resultado" : "resultados"}`;
+  elements.boardMeta.textContent = state.report.generatedAt
+    ? `Atualizado em ${formatDate(state.report.generatedAt)}`
+    : "Aguardando dados";
+
   if (!entries.length) {
     elements.rows.innerHTML = '<div class="empty-state">Nenhum produto encontrado com os filtros atuais.</div>';
     return;
@@ -188,14 +195,14 @@ function renderRows(entries) {
     const licenseLabel = entry.license === "primary" ? "Primaria" : "Secundaria";
     const licenseClass = entry.license === "primary" ? "license-primary" : "license-secondary";
     const statusLabel = {
-      expensive: "Nexus mais caro",
+      expensive: "Acima do mercado",
       close: "Preco alinhado",
-      cheaper: "Nexus mais barato",
+      cheaper: "Abaixo do mercado",
       missing: "Sem referencia"
     }[entry.status];
 
     return `
-      <article class="price-row">
+      <article class="price-row status-row-${entry.status}">
         <div class="game-cell">
           ${entry.item.image ? `<img src="${entry.item.image}" alt="" loading="lazy" onerror="this.remove()">` : `<img alt="">`}
           <div>
@@ -206,14 +213,27 @@ function renderRows(entries) {
             </div>
           </div>
         </div>
-        <div><span class="tag ${licenseClass}">${licenseLabel}</span></div>
-        <div class="money">${formatPrice(entry.myPrice)}</div>
-        <div>
-          <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
-          ${entry.best ? `<div class="game-meta">${findCompetitor(entry.best.id)?.name || entry.best.id}</div>` : ""}
+        <div class="cell-stack">
+          <span class="cell-label">Licenca</span>
+          <span class="tag ${licenseClass}">${licenseLabel}</span>
         </div>
-        <div class="money diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</div>
-        <div class="competitors">${renderCompetitors(entry)}</div>
+        <div class="cell-stack">
+          <span class="cell-label">Nexus</span>
+          <strong class="money">${formatPrice(entry.myPrice)}</strong>
+        </div>
+        <div class="cell-stack">
+          <span class="cell-label">Melhor concorrente</span>
+          <strong class="money">${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
+          ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
+        </div>
+        <div class="cell-stack">
+          <span class="cell-label">Variacao</span>
+          <strong class="money diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</strong>
+        </div>
+        <div class="competitor-area">
+          <span class="cell-label">Concorrentes</span>
+          <div class="competitors">${renderCompetitors(entry)}</div>
+        </div>
       </article>
     `;
   }).join("");
@@ -231,12 +251,15 @@ function renderCompetitors(entry) {
     const confirmed = review?.status === "confirmed";
     const actionMarkup = confirmed ? "" : `
       <span class="review-actions">
-        ${value?.url ? `<button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value.url)}">Este e o correto</button>` : ""}
-        <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Procurar outro</button>
+        ${value?.url ? `<button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value.url)}">Produto correto</button>` : ""}
+        <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Trocar produto</button>
       </span>
     `;
     const content = `
-      <span class="competitor-name">${competitor.name}</span>
+      <div class="competitor-top">
+        <span class="competitor-name">${competitor.name}</span>
+        ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Origem</a>` : ""}
+      </div>
       <strong>${value?.price ? formatPrice(value.price) : "Sem preco"}</strong>
       ${note ? `<small>${note}</small>` : ""}
       <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
@@ -244,7 +267,6 @@ function renderCompetitors(entry) {
     `;
     return `<div class="competitor${bestClass}${missingClass}">
       ${content}
-      ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Abrir origem</a>` : ""}
     </div>`;
   }).join("");
 }
