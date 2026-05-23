@@ -68,6 +68,8 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Alteracoes publicadas no Netlify no deploy `6a11f88c0d4e8999b5605e82`. A nova coleta foi disparada no Render em 23/05/2026 para recalcular a base com as regras de versao/pacote.
 - Ainda em 23/05/2026 foi feita uma remodelagem visual mais estrutural: painel de filtros com cabecalho, contador de resultados, cabecalho da lista, cards de concorrentes mais organizados, destaque lateral por situacao e leitura mais clara de Nexus / melhor concorrente / variacao.
 - Remodelagem publicada no Netlify no deploy `6a11fb0e67b486ae1bfb32e0`.
+- Depois da revisao visual, a lista deixou de parecer tabela e passou a usar cards de analise por produto/licenca: bloco do produto, faixa de precos e bloco de concorrentes. Deploy Netlify `6a11fd29749b3fae9a63493b`.
+- A confirmacao manual no painel atualiza todas as licencas do mesmo produto/concorrente no estado local imediatamente. Como o override salvo e por produto + concorrente, o worker tambem aplica a confirmacao para primaria e secundaria nas proximas leituras.
 
 ## Arquivos principais
 
