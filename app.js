@@ -275,7 +275,7 @@ function renderCompetitors(entry) {
     const ignored = value && !isCompetitorPriceCountable(entry.item.url, competitor.id, value);
     const bestClass = !ignored && entry.best?.id === competitor.id ? " best" : "";
     const missingClass = value?.price && !ignored ? "" : " missing";
-    const note = ignored ? "Fora do calculo" : value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
+    const note = ignored ? "Ignorado no calculo" : value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
