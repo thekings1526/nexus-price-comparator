@@ -2,6 +2,8 @@
 
 Este arquivo existe para nao perdermos o contexto do comparador.
 
+Existe tambem o arquivo `CONTEXTO_COMPLETO.md`, criado para retomar o projeto em uma conversa nova sem depender do historico completo do chat. Em nova conversa, ler `RETOMADA.md` e `CONTEXTO_COMPLETO.md` antes de mexer no projeto.
+
 ## Objetivo
 
 Criar um comparador de precos para a Nexus Games Digital, comparando cada jogo com concorrentes escolhidos, separando licenca primaria e secundaria.
@@ -78,6 +80,8 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Ainda em 23/05/2026, a pesquisa digitada no modal foi otimizada: primeiro tenta resolver pelo catalogo cacheado do concorrente e so chama a busca externa do site se o catalogo retornar poucos candidatos.
 - A leitura das paginas candidatas do modal tambem foi paralelizada com limite controlado, para trazer imagem/precos/licencas mais rapido sem transformar a correcao manual em uma coleta pesada.
 - Validacao publicada no Netlify deploy `6a120c1d0d4e89c67b605d23`: modal de troca abriu em cerca de 0,4s no painel real, sem erros de console. API de candidatos no teste publicado: busca `fifa` em 515ms na primeira chamada e 407ms na repetida; busca `gta` em 530ms; abertura inicial repetida em 425ms.
+- Em 23/05/2026 foi conferida a inconsistencia de producao `1038 itens salvos` contra `totalItems 1039`. A correcao de merge por URL em `worker/daily-refresh.js` estava correta, e foi reforcada a retomada parcial para usar URLs ainda nao processadas em vez de apenas `items.length`. Tambem foi confirmado que `refresh-prices.js` agora para com erro se um produto Nexus vier sem titulo legivel, em vez de pular silenciosamente.
+- Essa correcao foi publicada na Netlify no deploy `6a1212cf572cfacd1f813b92` e as APIs continuaram respondendo. A base publicada ainda mostra `1038/1039` porque o relatorio salvo e antigo; para corrigir a contagem visivel precisa rodar uma nova coleta limpa no Render com o worker atualizado.
 
 ## Arquivos principais
 
