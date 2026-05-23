@@ -574,6 +574,10 @@ h1 {
   color: var(--amber) !important;
 }
 
+.review-wrong {
+  color: var(--red) !important;
+}
+
 .review-actions {
   display: grid;
   grid-template-columns: 1fr;
