@@ -103,6 +103,7 @@ function bindEvents() {
     if (event.target === elements.reviewModal) closeReviewModal();
   });
   elements.reviewModalBody.addEventListener("click", handleModalAction);
+  elements.reviewModalBody.addEventListener("submit", handleModalSearch);
 }
 
 function render() {
@@ -171,9 +172,9 @@ function renderSummary(entries) {
   };
   elements.summaryGrid.innerHTML = `
     <article class="metric metric-risk"><b>${counts.expensive}</b><span>Nexus mais caro</span></article>
-    <article class="metric metric-aligned"><b>${counts.close}</b><span>Mesmo preco ou proximo</span></article>
+    <article class="metric metric-aligned"><b>${counts.close}</b><span>Preco alinhado</span></article>
     <article class="metric metric-advantage"><b>${counts.cheaper}</b><span>Nexus mais barato</span></article>
-    <article class="metric metric-missing"><b>${counts.missing}</b><span>Sem preco confiavel</span></article>
+    <article class="metric metric-missing"><b>${counts.missing}</b><span>Sem referencia</span></article>
   `;
 }
 
@@ -188,9 +189,9 @@ function renderRows(entries) {
     const licenseClass = entry.license === "primary" ? "license-primary" : "license-secondary";
     const statusLabel = {
       expensive: "Nexus mais caro",
-      close: "Preco proximo",
+      close: "Preco alinhado",
       cheaper: "Nexus mais barato",
-      missing: "Sem base"
+      missing: "Sem referencia"
     }[entry.status];
 
     return `
@@ -227,17 +228,19 @@ function renderCompetitors(entry) {
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
+    const confirmed = review?.status === "confirmed";
+    const actionMarkup = confirmed ? "" : `
+      <span class="review-actions">
+        ${value?.url ? `<button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value.url)}">Este e o correto</button>` : ""}
+        <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Procurar outro</button>
+      </span>
+    `;
     const content = `
       <span class="competitor-name">${competitor.name}</span>
       <strong>${value?.price ? formatPrice(value.price) : "Sem preco"}</strong>
       ${note ? `<small>${note}</small>` : ""}
       <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
-      <span class="review-actions">
-        <button type="button" data-review-action="confirm" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Correto</button>
-        <button type="button" data-review-action="wrong" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}" data-competitor-url="${escapeAttr(value?.url || "")}">Errado</button>
-        <button type="button" data-review-action="choose" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}">Trocar</button>
-        <button type="button" data-review-action="missing-today" data-own-url="${escapeAttr(entry.item.url)}" data-competitor-id="${competitor.id}">Nao tem hoje</button>
-      </span>
+      ${actionMarkup}
     `;
     return `<div class="competitor${bestClass}${missingClass}">
       ${content}
@@ -265,7 +268,7 @@ async function handleReviewAction(event) {
     return;
   }
 
-  if ((action === "confirm" || action === "wrong") && !payload.competitorUrl) {
+  if (action === "confirm" && !payload.competitorUrl) {
     openReviewModal({ ...payload, action: "choose" });
     return;
   }
@@ -287,6 +290,8 @@ async function saveReviewDecision(payload, button) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Nao consegui salvar");
+    applyLocalReviewDecision(payload);
+    render();
     if (button) button.textContent = "Salvo";
     setTimeout(loadSavedReport, 900);
   } catch (error) {
@@ -302,17 +307,37 @@ async function saveReviewDecision(payload, button) {
   }
 }
 
-async function openReviewModal(context) {
-  state.review.modalContext = context;
+function applyLocalReviewDecision(payload) {
+  if (payload.action === "wrong") return;
+  const item = (state.report.items || []).find((product) => product.url === payload.ownUrl);
+  if (!item) return;
+  Object.values(item.licenses || {}).forEach((license) => {
+    const competitor = license.competitors?.[payload.competitorId];
+    if (!competitor) return;
+    competitor.review = {
+      ...(competitor.review || {}),
+      status: payload.action === "missing-today" ? "missing-today" : "confirmed",
+      confidence: payload.action === "missing-today" ? 1 : 100,
+      label: payload.action === "missing-today" ? "Sem produto hoje" : "Confirmado por voce",
+      reasons: payload.action === "missing-today" ? ["Marcado como ausente nesta revisao"] : ["Vinculo salvo manualmente"]
+    };
+    if (payload.action === "choose" && payload.competitorUrl) competitor.url = payload.competitorUrl;
+  });
+  storeReport(state.report);
+}
+
+async function openReviewModal(context, query = "") {
+  state.review.modalContext = { ...context, query };
   elements.reviewModal.hidden = false;
-  elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: escolher produto`;
+  elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: corrigir vinculo`;
   elements.reviewModalBody.innerHTML = '<div class="empty-state">Carregando candidatos...</div>';
 
   try {
     const params = new URLSearchParams({
       ownUrl: context.ownUrl,
       competitorId: context.competitorId,
-      limit: "10"
+      limit: "14",
+      query
     });
     const response = await fetch(`/api/review-candidates?${params}`, { cache: "no-store" });
     const payload = await response.json();
@@ -326,6 +351,7 @@ async function openReviewModal(context) {
 function renderReviewCandidates(payload) {
   const own = payload.ownProduct;
   const candidates = payload.candidates || [];
+  const query = state.review.modalContext?.query || "";
   elements.reviewModalBody.innerHTML = `
     <div class="review-own">
       ${own.image ? `<img src="${own.image}" alt="" onerror="this.remove()">` : ""}
@@ -335,8 +361,13 @@ function renderReviewCandidates(payload) {
         <small>Nexus: Primaria ${formatPrice(own.licenses?.primary?.price)} | Secundaria ${formatPrice(own.licenses?.secondary?.price)}</small>
       </div>
     </div>
+    <form class="review-search">
+      <input name="query" type="search" value="${escapeAttr(query)}" placeholder="Pesquisar no concorrente" autofocus>
+      <button type="submit">Pesquisar</button>
+      <button type="button" data-modal-action="missing-today">Nao tem no concorrente hoje</button>
+    </form>
     <div class="candidate-list">
-      ${candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado para este concorrente.</div>'}
+      ${candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado. Pesquise pelo nome usado no site do concorrente.</div>'}
     </div>
   `;
 }
@@ -354,7 +385,7 @@ function renderCandidate(candidate) {
         <small>IA observadora: ${confidence}% - ${escapeHtml(reasons)}</small>
       </div>
       <button type="button" data-modal-action="choose-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Usar este</button>
-      <button type="button" data-modal-action="reject-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Marcar errado</button>
+      <button type="button" data-modal-action="reject-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Nao e este</button>
     </article>
   `;
 }
@@ -362,13 +393,22 @@ function renderCandidate(candidate) {
 async function handleModalAction(event) {
   const button = event.target.closest("[data-modal-action]");
   if (!button || !state.review.modalContext) return;
-  const action = button.dataset.modalAction === "choose-candidate" ? "choose" : "wrong";
+  const modalAction = button.dataset.modalAction;
+  const action = modalAction === "choose-candidate" ? "choose" : modalAction === "missing-today" ? "missing-today" : "wrong";
   await saveReviewDecision({
     ...state.review.modalContext,
     action,
-    competitorUrl: button.dataset.candidateUrl
+    competitorUrl: button.dataset.candidateUrl || state.review.modalContext.competitorUrl || ""
   }, button);
-  if (action === "choose") closeReviewModal();
+  if (action === "choose" || action === "missing-today") closeReviewModal();
+  if (action === "wrong") openReviewModal(state.review.modalContext, state.review.modalContext.query || "");
+}
+
+function handleModalSearch(event) {
+  event.preventDefault();
+  if (!state.review.modalContext) return;
+  const data = new FormData(event.target);
+  openReviewModal(state.review.modalContext, String(data.get("query") || "").trim());
 }
 
 function closeReviewModal() {
