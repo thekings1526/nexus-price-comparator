@@ -28,7 +28,10 @@ const state = {
   refreshTimer: null,
   review: {
     modalContext: null,
-    loading: false
+    loading: false,
+    requestKey: "",
+    candidatesCache: new Map(),
+    candidateRequests: new Map()
   }
 };
 
@@ -115,6 +118,7 @@ function bindEvents() {
 
   elements.runWorkerButton.addEventListener("click", triggerWorkerRun);
   elements.rows.addEventListener("click", handleReviewAction);
+  elements.rows.addEventListener("pointerover", handleReviewPrefetch);
   elements.closeReviewModal.addEventListener("click", closeReviewModal);
   elements.reviewModal.addEventListener("click", (event) => {
     if (event.target === elements.reviewModal) closeReviewModal();
@@ -350,14 +354,20 @@ async function handleReviewAction(event) {
     return;
   }
 
-  await saveReviewDecision(payload, button);
+  saveReviewDecision(payload, button);
 }
 
-async function saveReviewDecision(payload, button) {
+async function saveReviewDecision(payload, button, options = {}) {
+  const optimistic = options.optimistic !== false;
+  const silent = options.silent === true;
   const original = button?.textContent;
   if (button) {
     button.disabled = true;
     button.textContent = "Salvando";
+  }
+  if (optimistic) {
+    applyLocalReviewDecision(payload);
+    render();
   }
   try {
     const response = await fetch("/api/review-decision", {
@@ -367,12 +377,15 @@ async function saveReviewDecision(payload, button) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Nao consegui salvar");
-    applyLocalReviewDecision(payload);
-    render();
+    if (!optimistic) {
+      applyLocalReviewDecision(payload);
+      render();
+    }
     if (button) button.textContent = "Salvo";
-    setTimeout(loadSavedReport, 900);
+    setTimeout(loadSavedReport, 1800);
   } catch (error) {
-    window.alert(error.message || "Nao consegui salvar a revisao.");
+    if (!silent) window.alert(error.message || "Nao consegui salvar a revisao.");
+    setTimeout(loadSavedReport, 300);
     if (button) button.textContent = original;
   } finally {
     if (button) {
@@ -467,29 +480,33 @@ function normalizeReviewUrl(value) {
 }
 
 async function openReviewModal(context, query = "") {
+  const requestKey = reviewCandidateCacheKey(context, query);
   state.review.modalContext = { ...context, query };
+  state.review.requestKey = requestKey;
   elements.reviewModal.hidden = false;
   elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: corrigir vinculo`;
-  elements.reviewModalBody.innerHTML = '<div class="empty-state">Carregando candidatos...</div>';
+  if (state.review.candidatesCache.has(requestKey)) {
+    renderReviewCandidates(state.review.candidatesCache.get(requestKey));
+  } else {
+    renderReviewCandidates({
+      ownProduct: buildOwnProductForReview(context.ownUrl),
+      candidates: [],
+      loading: true
+    });
+  }
 
   try {
-    const params = new URLSearchParams({
-      ownUrl: context.ownUrl,
-      competitorId: context.competitorId,
-      limit: "14",
-      query
-    });
-    const response = await fetch(`/api/review-candidates?${params}`, { cache: "no-store" });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "Nao consegui carregar candidatos");
+    const payload = await fetchReviewCandidates(context, query);
+    if (state.review.requestKey !== requestKey) return;
     renderReviewCandidates(payload);
   } catch (error) {
+    if (state.review.requestKey !== requestKey) return;
     elements.reviewModalBody.innerHTML = `<div class="empty-state">${escapeHtml(error.message || "Falha ao carregar candidatos.")}</div>`;
   }
 }
 
 function renderReviewCandidates(payload) {
-  const own = payload.ownProduct;
+  const own = payload.ownProduct || buildOwnProductForReview(state.review.modalContext?.ownUrl);
   const candidates = payload.candidates || [];
   const query = state.review.modalContext?.query || "";
   state.review.candidates = {};
@@ -508,7 +525,9 @@ function renderReviewCandidates(payload) {
       <button type="button" data-modal-action="missing-today">Nao tem no concorrente hoje</button>
     </form>
     <div class="candidate-list">
-      ${candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado. Pesquise pelo nome usado no site do concorrente.</div>'}
+      ${payload.loading
+        ? '<div class="empty-state">Carregando sugestoes do concorrente...</div>'
+        : candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado. Pesquise pelo nome usado no site do concorrente.</div>'}
     </div>
   `;
 }
@@ -545,14 +564,19 @@ async function handleModalAction(event) {
   const modalAction = button.dataset.modalAction;
   const action = modalAction === "choose-candidate" ? "choose" : modalAction === "missing-today" ? "missing-today" : "wrong";
   const candidate = state.review.candidates?.[button.dataset.candidateKey] || null;
-  await saveReviewDecision({
+  const payload = {
     ...state.review.modalContext,
     action,
     competitorUrl: button.dataset.candidateUrl || state.review.modalContext.competitorUrl || "",
     candidate
-  }, button);
-  if (action === "choose" || action === "missing-today") closeReviewModal();
-  if (action === "wrong") openReviewModal(state.review.modalContext, state.review.modalContext.query || "");
+  };
+  if (action === "choose" || action === "missing-today") {
+    closeReviewModal();
+    saveReviewDecision(payload, button);
+    return;
+  }
+  removeRejectedCandidate(button);
+  saveReviewDecision(payload, null, { optimistic: false, silent: true });
 }
 
 function handleModalSearch(event) {
@@ -565,6 +589,72 @@ function handleModalSearch(event) {
 function closeReviewModal() {
   elements.reviewModal.hidden = true;
   state.review.modalContext = null;
+  state.review.requestKey = "";
+}
+
+function removeRejectedCandidate(button) {
+  const card = button.closest(".candidate-card");
+  if (card) card.remove();
+  const key = button.dataset.candidateKey;
+  if (key && state.review.candidates) delete state.review.candidates[key];
+  if (!elements.reviewModalBody.querySelector(".candidate-card")) {
+    const list = elements.reviewModalBody.querySelector(".candidate-list");
+    if (list) list.innerHTML = '<div class="empty-state">Candidato removido. Pesquise pelo nome usado no site do concorrente.</div>';
+  }
+}
+
+function reviewCandidateCacheKey(context, query = "") {
+  return `${context.ownUrl || ""}::${context.competitorId || ""}::${String(query || "").trim().toLowerCase()}`;
+}
+
+function handleReviewPrefetch(event) {
+  const button = event.target.closest('[data-review-action="choose"]');
+  if (!button || button.dataset.prefetched === "1") return;
+  button.dataset.prefetched = "1";
+  const context = {
+    action: "choose",
+    ownUrl: button.dataset.ownUrl,
+    competitorId: button.dataset.competitorId,
+    competitorUrl: button.dataset.competitorUrl || ""
+  };
+  fetchReviewCandidates(context, "").catch(() => {});
+}
+
+async function fetchReviewCandidates(context, query = "") {
+  const requestKey = reviewCandidateCacheKey(context, query);
+  if (state.review.candidatesCache.has(requestKey)) return state.review.candidatesCache.get(requestKey);
+  if (state.review.candidateRequests.has(requestKey)) return state.review.candidateRequests.get(requestKey);
+
+  const params = new URLSearchParams({
+    ownUrl: context.ownUrl,
+    competitorId: context.competitorId,
+    limit: query ? "12" : "8",
+    query
+  });
+  const request = fetch(`/api/review-candidates?${params}`, { cache: "no-store" })
+    .then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Nao consegui carregar candidatos");
+      state.review.candidatesCache.set(requestKey, payload);
+      return payload;
+    })
+    .finally(() => state.review.candidateRequests.delete(requestKey));
+  state.review.candidateRequests.set(requestKey, request);
+  return request;
+}
+
+function buildOwnProductForReview(ownUrl) {
+  const item = (state.report.items || []).find((product) => product.url === ownUrl);
+  return {
+    url: item?.url || ownUrl || "",
+    title: item?.title || "Produto Nexus",
+    image: item?.image || "",
+    platform: item?.platform || "",
+    licenses: {
+      primary: { price: item?.licenses?.primary?.myPrice ?? null },
+      secondary: { price: item?.licenses?.secondary?.myPrice ?? null }
+    }
+  };
 }
 
 async function loadSavedReport() {
