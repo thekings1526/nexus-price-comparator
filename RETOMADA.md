@@ -72,7 +72,7 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - A confirmacao manual no painel atualiza todas as licencas do mesmo produto/concorrente no estado local imediatamente. Como o override salvo e por produto + concorrente, o worker tambem aplica a confirmacao para primaria e secundaria nas proximas leituras.
 - Em 23/05/2026 foi corrigido o comportamento de tempo real dos botoes de revisao: o painel agora guarda as decisoes locais em `nexus-review-decisions` e reaplica por cima do relatorio quando o auto-refresh carrega dados antigos. O botao `Usar este` tambem leva os dados do candidato escolhido para atualizar o card na hora.
 - Em 23/05/2026 foi feita a limpeza visual das revisoes resolvidas: apos `Produto correto`, `Usar este` ou `Nao tem no concorrente hoje`, o bloco grande de botoes some. Confirmado/trocado fica sem botao; ausencia temporaria fica apenas com um botao pequeno `Revisar`.
-- Em 23/05/2026 foi corrigido o calculo do painel apos revisao manual: produto marcado como incorreto ou ausente hoje deixa de entrar no `Melhor concorrente`, na `Variacao`, no status e nas ordenacoes. A marcacao `incorreto` e especifica para o link rejeitado, entao outro link futuro do mesmo concorrente pode voltar a ser usado normalmente.
+- Em 23/05/2026 foi corrigido o calculo do painel apos revisao manual: produto marcado como incorreto ou ausente hoje deixa de entrar no `Melhor concorrente`, na `Variacao`, no status e nas ordenacoes. A marcacao `incorreto` e especifica para o link rejeitado, entao outro link futuro do mesmo concorrente pode voltar a ser usado normalmente. O card passa a indicar `Ignorado no calculo` e o selo `Marcado incorreto` fica destacado.
 
 ## Arquivos principais
 
