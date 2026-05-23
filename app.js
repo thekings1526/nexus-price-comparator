@@ -6,6 +6,7 @@ const competitors = [
 ];
 
 const APP_SCHEMA_VERSION = 4;
+const REVIEW_CACHE_KEY = "nexus-review-decisions";
 
 const demoReport = {
   schemaVersion: APP_SCHEMA_VERSION,
@@ -23,6 +24,7 @@ const state = {
   search: "",
   sort: "status",
   threshold: 2,
+  reviewDecisions: loadStoredReviewDecisions(),
   refreshTimer: null,
   review: {
     modalContext: null,
@@ -70,6 +72,19 @@ function loadStoredReport() {
 
 function storeReport(report) {
   localStorage.setItem("nexus-price-report", JSON.stringify(report));
+}
+
+function loadStoredReviewDecisions() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REVIEW_CACHE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function storeReviewDecisions() {
+  localStorage.setItem(REVIEW_CACHE_KEY, JSON.stringify(state.reviewDecisions));
 }
 
 function bindEvents() {
@@ -334,13 +349,35 @@ async function saveReviewDecision(payload, button) {
 
 function applyLocalReviewDecision(payload) {
   if (payload.action === "wrong") return;
-  const item = (state.report.items || []).find((product) => product.url === payload.ownUrl);
+  rememberReviewDecision(payload);
+  applyReviewDecisionToReport(state.report, payload);
+  storeReport(state.report);
+}
+
+function rememberReviewDecision(payload) {
+  if (!payload.ownUrl || !payload.competitorId) return;
+  const key = reviewDecisionKey(payload.ownUrl, payload.competitorId);
+  state.reviewDecisions[key] = {
+    action: payload.action,
+    ownUrl: payload.ownUrl,
+    competitorId: payload.competitorId,
+    competitorUrl: payload.competitorUrl || "",
+    candidate: payload.candidate || null,
+    savedAt: new Date().toISOString()
+  };
+  storeReviewDecisions();
+}
+
+function applyReviewDecisionToReport(report, payload) {
+  const item = (report.items || []).find((product) => product.url === payload.ownUrl);
   if (!item) return;
   Object.values(item.licenses || {}).forEach((license) => {
     license.competitors = license.competitors || {};
     const competitor = license.competitors[payload.competitorId] || {};
     license.competitors[payload.competitorId] = competitor;
     if (!competitor) return;
+    const licenseKey = license === item.licenses?.primary ? "primary" : "secondary";
+    const candidateLicense = payload.candidate?.licenses?.[licenseKey];
     competitor.review = {
       ...(competitor.review || {}),
       status: payload.action === "missing-today" ? "missing-today" : "confirmed",
@@ -348,9 +385,22 @@ function applyLocalReviewDecision(payload) {
       label: payload.action === "missing-today" ? "Sem produto hoje" : "Confirmado por voce",
       reasons: payload.action === "missing-today" ? ["Marcado como ausente nesta revisao"] : ["Vinculo salvo manualmente"]
     };
-    if (payload.action === "choose" && payload.competitorUrl) competitor.url = payload.competitorUrl;
+    if ((payload.action === "choose" || payload.action === "confirm") && payload.competitorUrl) competitor.url = payload.competitorUrl;
+    if (payload.candidate) {
+      competitor.title = payload.candidate.title || competitor.title;
+      competitor.available = candidateLicense?.available ?? competitor.available;
+      if (typeof candidateLicense?.price === "number") competitor.price = candidateLicense.price;
+    }
   });
-  storeReport(state.report);
+}
+
+function applyStoredReviewDecisions(report) {
+  Object.values(state.reviewDecisions || {}).forEach((decision) => applyReviewDecisionToReport(report, decision));
+  return report;
+}
+
+function reviewDecisionKey(ownUrl, competitorId) {
+  return `${ownUrl}::${competitorId}`;
 }
 
 async function openReviewModal(context, query = "") {
@@ -379,6 +429,7 @@ function renderReviewCandidates(payload) {
   const own = payload.ownProduct;
   const candidates = payload.candidates || [];
   const query = state.review.modalContext?.query || "";
+  state.review.candidates = {};
   elements.reviewModalBody.innerHTML = `
     <div class="review-own">
       ${own.image ? `<img src="${own.image}" alt="" onerror="this.remove()">` : ""}
@@ -402,6 +453,7 @@ function renderReviewCandidates(payload) {
 function renderCandidate(candidate) {
   const confidence = candidate.review?.confidence || Math.max(0, Math.min(100, Math.round(candidate.score || 0)));
   const reasons = candidate.review?.reasons?.length ? candidate.review.reasons.join(" · ") : "Candidato encontrado";
+  const candidateKey = rememberModalCandidate(candidate);
   return `
     <article class="candidate-card">
       ${candidate.image ? `<img src="${candidate.image}" alt="" loading="lazy" onerror="this.remove()">` : "<span></span>"}
@@ -411,10 +463,17 @@ function renderCandidate(candidate) {
         <small>Primaria ${formatPrice(candidate.licenses?.primary?.price)} | Secundaria ${formatPrice(candidate.licenses?.secondary?.price)}</small>
         <small>IA observadora: ${confidence}% - ${escapeHtml(reasons)}</small>
       </div>
-      <button type="button" data-modal-action="choose-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Usar este</button>
-      <button type="button" data-modal-action="reject-candidate" data-candidate-url="${escapeAttr(candidate.url)}">Nao e este</button>
+      <button type="button" data-modal-action="choose-candidate" data-candidate-key="${escapeAttr(candidateKey)}" data-candidate-url="${escapeAttr(candidate.url)}">Usar este</button>
+      <button type="button" data-modal-action="reject-candidate" data-candidate-key="${escapeAttr(candidateKey)}" data-candidate-url="${escapeAttr(candidate.url)}">Nao e este</button>
     </article>
   `;
+}
+
+function rememberModalCandidate(candidate) {
+  const key = candidate.url || `${candidate.title}-${Object.keys(state.review.candidates || {}).length}`;
+  state.review.candidates = state.review.candidates || {};
+  state.review.candidates[key] = candidate;
+  return key;
 }
 
 async function handleModalAction(event) {
@@ -422,10 +481,12 @@ async function handleModalAction(event) {
   if (!button || !state.review.modalContext) return;
   const modalAction = button.dataset.modalAction;
   const action = modalAction === "choose-candidate" ? "choose" : modalAction === "missing-today" ? "missing-today" : "wrong";
+  const candidate = state.review.candidates?.[button.dataset.candidateKey] || null;
   await saveReviewDecision({
     ...state.review.modalContext,
     action,
-    competitorUrl: button.dataset.candidateUrl || state.review.modalContext.competitorUrl || ""
+    competitorUrl: button.dataset.candidateUrl || state.review.modalContext.competitorUrl || "",
+    candidate
   }, button);
   if (action === "choose" || action === "missing-today") closeReviewModal();
   if (action === "wrong") openReviewModal(state.review.modalContext, state.review.modalContext.query || "");
@@ -449,8 +510,8 @@ async function loadSavedReport() {
     if (!response.ok) return;
     const payload = await response.json();
     if (payload.report?.items) {
-      state.report = payload.report;
-      storeReport(payload.report);
+      state.report = applyStoredReviewDecisions(payload.report);
+      storeReport(state.report);
     }
     state.remoteStatus = payload.status || null;
     render();
