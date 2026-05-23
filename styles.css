@@ -261,45 +261,46 @@ h1 {
 
 .board {
   overflow: hidden;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .board-header {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   background: #fff;
-}
-
-.table-head,
-.price-row {
-  display: grid;
-  grid-template-columns: minmax(320px, 1.24fr) 88px 116px 150px 110px minmax(420px, 1.55fr);
-  gap: 12px;
-  align-items: center;
+  box-shadow: var(--shadow);
 }
 
 .table-head {
-  min-height: 44px;
-  padding: 0 14px;
-  background: #eef2f6;
-  color: #475467;
-  font-size: 0.74rem;
-  font-weight: 850;
-  text-transform: uppercase;
+  display: none;
 }
 
 .rows {
   display: grid;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .price-row {
-  min-height: 112px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 0.8fr) minmax(420px, 1.35fr);
+  gap: 16px;
+  align-items: stretch;
+  min-height: 156px;
+  border: 1px solid var(--line);
   border-left: 5px solid transparent;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
 }
 
 .price-row:hover {
-  background: #fbfcfe;
+  border-color: #cbd5e1;
+  background: #fcfdff;
 }
 
 .status-row-expensive {
@@ -320,15 +321,15 @@ h1 {
 
 .game-cell {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: 72px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   min-width: 0;
 }
 
 .game-cell img {
-  width: 58px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--slate-soft);
@@ -338,7 +339,7 @@ h1 {
 .game-title {
   display: block;
   overflow: hidden;
-  font-size: 0.93rem;
+  font-size: 0.98rem;
   font-weight: 800;
   text-decoration: none;
   text-overflow: ellipsis;
@@ -357,6 +358,12 @@ h1 {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.card-main {
+  display: grid;
+  align-items: center;
+  min-width: 0;
 }
 
 .tag,
@@ -426,8 +433,55 @@ h1 {
 
 .competitor-area {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+}
+
+.competitor-area-title {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.price-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: stretch;
+}
+
+.price-box {
+  display: grid;
+  gap: 5px;
+  align-content: center;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.price-box span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.price-box strong {
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.price-box small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.price-box-diff {
+  background: #fff;
 }
 
 .diff.positive {
@@ -452,7 +506,7 @@ h1 {
   display: grid;
   grid-template-rows: auto auto auto 1fr auto;
   gap: 5px;
-  min-height: 104px;
+  min-height: 112px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px;
@@ -491,7 +545,7 @@ h1 {
 }
 
 .competitor strong {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   line-height: 1.1;
 }
 
@@ -728,11 +782,12 @@ h1 {
   }
 
   .price-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     align-items: start;
   }
 
   .game-cell,
+  .price-strip,
   .competitor-area {
     grid-column: 1 / -1;
   }
@@ -771,6 +826,10 @@ h1 {
   }
 
   .competitors {
+    grid-template-columns: 1fr;
+  }
+
+  .price-strip {
     grid-template-columns: 1fr;
   }
 
