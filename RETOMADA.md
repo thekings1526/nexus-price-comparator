@@ -60,6 +60,12 @@ O catalogo encontrado tem cerca de 1039 itens. A coleta pesada nao deve depender
 - Foi corrigido um falso positivo importante: numero e edicao nao bastam mais para aceitar match. Precisa bater tambem pelo menos uma palavra forte do nome do jogo, evitando casos como `Remnant II 2 Ultimate` cair em `Dead Island 2 Ultimate`.
 - A alteracao foi publicada no GitHub no commit `03ef653` e no Netlify no deploy `6a105f13ed7186b050269e41`.
 - Uma nova coleta foi disparada no Render em 22/05/2026 para recalcular o relatorio com essas regras.
+- Em 23/05/2026 a revisao manual foi simplificada: fora do modal aparecem apenas `Este e o correto` e `Procurar outro`. Quando um par e confirmado manualmente, os botoes somem daquele concorrente.
+- O modal de correcao agora tem busca interna no concorrente. O usuario pode digitar o nome usado pelo concorrente, ver candidatos com preco/imagem e escolher o produto correto sem sair do painel.
+- A opcao `Nao tem no concorrente hoje` marca ausencia temporaria; isso nao bloqueia o robo para sempre, pois o concorrente pode cadastrar o produto em outra coleta.
+- A comparacao de versoes ficou mais rigida: edicoes/pacotes como `Deluxe`, `Ultimate`, `Anthology`, `Premium`, `Pack`, `Bundle`, `Collection`, `Trilogy`, `Gold`, `Complete`, `Definitive` e similares precisam bater entre Nexus e concorrente.
+- A tela foi reorganizada com nomes mais diretos nos filtros, resumo e colunas: `Situacao`, `Preco alinhado`, `Sem referencia`, `Melhor concorrente`, `Variacao`, etc.
+- Alteracoes publicadas no Netlify no deploy `6a11f88c0d4e8999b5605e82`. A nova coleta foi disparada no Render em 23/05/2026 para recalcular a base com as regras de versao/pacote.
 
 ## Arquivos principais
 
