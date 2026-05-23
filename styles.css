@@ -583,7 +583,8 @@ h1 {
 
 .review-actions button,
 .candidate-card button,
-.icon-button {
+.icon-button,
+.review-mini-action {
   min-height: 32px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -592,6 +593,16 @@ h1 {
   cursor: pointer;
   font-size: 0.7rem;
   font-weight: 850;
+}
+
+.review-mini-action {
+  justify-self: start;
+  min-height: 26px;
+  margin-top: 2px;
+  padding: 0 9px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.66rem;
 }
 
 .review-actions button[data-review-action="choose"],
