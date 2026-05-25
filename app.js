@@ -9,6 +9,24 @@ const APP_SCHEMA_VERSION = 4;
 const REVIEW_CACHE_KEY = "nexus-review-decisions";
 const SEARCH_RENDER_DELAY_MS = 120;
 const ROW_RENDER_BATCH_SIZE = 70;
+const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
+  "ps4",
+  "ps5",
+  "ps3",
+  "playstation",
+  "midia",
+  "digital",
+  "primaria",
+  "primario",
+  "primary",
+  "secundaria",
+  "secundario",
+  "secondary",
+  "licenca",
+  "jogo",
+  "game",
+  "games"
+]);
 
 const demoReport = {
   schemaVersion: APP_SCHEMA_VERSION,
@@ -473,21 +491,28 @@ function applyLocalReviewDecision(payload) {
 
 function rememberReviewDecision(payload) {
   if (!payload.ownUrl || !payload.competitorId) return;
-  const key = reviewDecisionKey(payload.ownUrl, payload.competitorId);
-  state.reviewDecisions[key] = {
-    action: payload.action,
-    ownUrl: payload.ownUrl,
-    competitorId: payload.competitorId,
-    competitorUrl: payload.competitorUrl || "",
-    candidate: payload.candidate || null,
-    savedAt: new Date().toISOString()
-  };
+  for (const relatedPayload of relatedReviewPayloads(state.report, payload)) {
+    const key = reviewDecisionKey(relatedPayload.ownUrl, relatedPayload.competitorId);
+    state.reviewDecisions[key] = {
+      action: relatedPayload.action,
+      ownUrl: relatedPayload.ownUrl,
+      competitorId: relatedPayload.competitorId,
+      competitorUrl: relatedPayload.competitorUrl || "",
+      candidate: relatedPayload.candidate || null,
+      savedAt: new Date().toISOString()
+    };
+  }
   storeReviewDecisions();
 }
 
 function applyReviewDecisionToReport(report, payload) {
-  const item = (report.items || []).find((product) => product.url === payload.ownUrl);
-  if (!item) return;
+  for (const relatedPayload of relatedReviewPayloads(report, payload)) {
+    const item = (report.items || []).find((product) => product.url === relatedPayload.ownUrl);
+    if (item) applyReviewDecisionToItem(item, relatedPayload);
+  }
+}
+
+function applyReviewDecisionToItem(item, payload) {
   Object.values(item.licenses || {}).forEach((license) => {
     license.competitors = license.competitors || {};
     const competitor = license.competitors[payload.competitorId] || {};
@@ -514,6 +539,62 @@ function applyReviewDecisionToReport(report, payload) {
       if (typeof candidateLicense?.price === "number") competitor.price = candidateLicense.price;
     }
   });
+}
+
+function relatedReviewPayloads(report, payload) {
+  const source = (report?.items || []).find((product) => product.url === payload.ownUrl);
+  if (!source) return [payload];
+  const familyKey = reviewFamilyKey(source);
+  if (!familyKey) return [payload];
+  return (report.items || [])
+    .filter((item) => reviewFamilyKey(item) === familyKey)
+    .filter((item) => shouldShareReviewFamily(source, item))
+    .map((item) => {
+      if (item.url === payload.ownUrl) return payload;
+      const competitorUrl = reviewCompetitorUrlForItem(item, payload.competitorId) || "";
+      if (payload.action !== "missing-today" && !competitorUrl) return null;
+      return {
+        ...payload,
+        ownUrl: item.url,
+        competitorUrl,
+        candidate: null
+      };
+    })
+    .filter(Boolean);
+}
+
+function reviewCompetitorUrlForItem(item, competitorId) {
+  for (const license of Object.values(item.licenses || {})) {
+    const url = license?.competitors?.[competitorId]?.url;
+    if (url) return url;
+  }
+  return "";
+}
+
+function reviewFamilyKey(item) {
+  const text = normalizeSearchText(`${item?.title || ""}`);
+  if (!text) return "";
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !REVIEW_FAMILY_IGNORED_TOKENS.has(token))
+    .join(" ");
+}
+
+function shouldShareReviewFamily(source, item) {
+  const sourcePlatform = reviewPlatformKey(source);
+  if (sourcePlatform === "ps4" || sourcePlatform === "ps5") {
+    const targetPlatform = reviewPlatformKey(item);
+    return targetPlatform === "ps4" || targetPlatform === "ps5";
+  }
+  return source?.url === item?.url;
+}
+
+function reviewPlatformKey(item) {
+  const text = normalizeSearchText(`${item?.platform || ""} ${item?.title || ""}`);
+  if (/\bps5\b|playstation 5/.test(text)) return "ps5";
+  if (/\bps4\b|playstation 4/.test(text)) return "ps4";
+  return "";
 }
 
 function applyStoredReviewDecisions(report) {
