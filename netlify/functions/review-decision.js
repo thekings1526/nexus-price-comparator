@@ -11,7 +11,7 @@ exports.handler = async (event) => {
     const overrides = await recordReviewDecision(body);
     return json({ ok: true, overrides });
   } catch (error) {
-    return json({ error: error.message || "Erro ao salvar revisao" }, 500);
+    return json({ error: error.message || "Erro ao salvar revisão" }, 500);
   }
 };
 
