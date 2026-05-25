@@ -1584,7 +1584,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   let tokenScore = 0;
   let meaningfulMatches = 0;
   for (const token of ownTokens) {
-    if (!comparableCandidateTokens.has(token)) continue;
+    if (!hasComparableToken(token, comparableCandidateTokens)) continue;
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
@@ -1608,7 +1608,7 @@ function coreTitleAgreementAccepted(ownTokens, candidateTokens) {
   const coreOwn = coreTitleTokens(ownTokens);
   if (!coreOwn.length) return true;
   const comparableCandidate = comparableTokenSet(candidateTokens);
-  return coreOwn.some((token) => comparableCandidate.has(token) || comparableCandidate.has(ROMAN_NUMERALS[token]));
+  return coreOwn.some((token) => hasComparableToken(token, comparableCandidate));
 }
 
 function coreTitleTokens(tokens) {
@@ -1623,7 +1623,7 @@ function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
   const candidateSet = comparableTokenSet(candidateTokens);
   if (ownSet.has("call") && ownSet.has("duty") && candidateSet.has("call") && candidateSet.has("duty")) {
     const subtitle = ownTokens.filter((token) => !CALL_OF_DUTY_BASE_TOKENS.has(token) && !/^\d+$/.test(token));
-    return subtitle.every((token) => candidateSet.has(token));
+    return subtitle.every((token) => hasComparableToken(token, candidateSet));
   }
   if (ownSet.has("dark") && ownSet.has("pictures") && ownSet.has("anthology")
     && candidateSet.has("dark") && candidateSet.has("pictures") && candidateSet.has("anthology")) {
@@ -1631,7 +1631,7 @@ function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
     const ownSubtitle = ownTokens.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
     const candidateSubtitle = candidateList.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
     if (!ownSubtitle.length || !candidateSubtitle.length) return true;
-    return ownSubtitle.every((token) => candidateSet.has(token) || candidateSet.has(ROMAN_NUMERALS[token]));
+    return ownSubtitle.every((token) => hasComparableToken(token, candidateSet));
   }
   return true;
 }
@@ -1669,7 +1669,7 @@ function titleCoverageScore(ownTokens, candidateTokens) {
     .filter((token) => !LOOSE_TITLE_TOKENS.has(token));
   if (!distinctOwn.length) return 0;
   const comparableCandidate = comparableTokenSet(candidateTokens);
-  const matches = distinctOwn.filter((token) => comparableCandidate.has(token) || comparableCandidate.has(ROMAN_NUMERALS[token]));
+  const matches = distinctOwn.filter((token) => hasComparableToken(token, comparableCandidate));
   const coverage = matches.length / distinctOwn.length;
   if (distinctOwn.length <= 2) return coverage === 1 ? 12 : 0;
   if (distinctOwn.length <= 4) return coverage >= 0.75 ? Math.round(12 * coverage) : 0;
@@ -1683,6 +1683,46 @@ function comparableTokenSet(tokens) {
     for (const variant of seasonNumberVariants(token)) comparable.add(variant);
   }
   return comparable;
+}
+
+function hasComparableToken(token, comparableTokens) {
+  const normalized = ROMAN_NUMERALS[token] || token;
+  if (comparableTokens.has(token) || comparableTokens.has(normalized)) return true;
+  if (!isFuzzyTitleTokenEligible(token)) return false;
+  return Array.from(comparableTokens).some((candidate) => areCompressedTitleVariants(token, candidate));
+}
+
+function areCompressedTitleVariants(left, right) {
+  if (left === right || !isFuzzyTitleTokenEligible(left) || !isFuzzyTitleTokenEligible(right)) return false;
+  const [longer, shorter] = left.length >= right.length ? [left, right] : [right, left];
+  const diff = longer.length - shorter.length;
+  if (diff < 1 || diff > 2 || shorter.length < 3 || longer.length > 10) return false;
+  if (longer[0] !== shorter[0]) return false;
+
+  const removed = removedSubsequenceChars(longer, shorter);
+  return removed.length === diff && removed.every((char) => VOWELS.has(char));
+}
+
+function removedSubsequenceChars(longer, shorter) {
+  const removed = [];
+  let shorterIndex = 0;
+  for (const char of longer) {
+    if (shorterIndex < shorter.length && char === shorter[shorterIndex]) {
+      shorterIndex += 1;
+    } else {
+      removed.push(char);
+    }
+  }
+  return shorterIndex === shorter.length ? removed : [];
+}
+
+function isFuzzyTitleTokenEligible(token) {
+  return /^[a-z]+$/.test(token)
+    && token.length >= 3
+    && token.length <= 10
+    && !LOOSE_TITLE_TOKENS.has(token)
+    && !EDITION_TOKENS.has(token)
+    && !STOP_WORDS.has(token);
 }
 
 function seasonNumberVariants(token) {
@@ -1874,7 +1914,7 @@ function expandAliases(tokens) {
   if (/grand theft auto/.test(joined)) expanded.push("gta");
   if (/grand theft auto/.test(joined) && (tokens.includes("v") || tokens.includes("5"))) expanded.push("5");
   if (tokens.includes("fifa") || tokens.includes("fc")) expanded.push("fifa", "fc");
-  if (tokens.includes("yotei") || tokens.includes("ytei")) expanded.push("yotei", "ytei");
+  if (tokens.includes("yotei") || tokens.includes("ytei") || tokens.includes("yte") || tokens.includes("yote")) expanded.push("yotei", "ytei", "yte", "yote");
   return uniqueBy(expanded, (token) => token);
 }
 
@@ -2121,6 +2161,8 @@ const ROMAN_NUMERALS = {
   ix: "9",
   x: "10"
 };
+
+const VOWELS = new Set(["a", "e", "i", "o", "u"]);
 
 module.exports.buildReport = buildReport;
 module.exports.saveReport = saveReport;
