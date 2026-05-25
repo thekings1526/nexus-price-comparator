@@ -4,6 +4,21 @@ Este arquivo existe para nao perdermos o contexto do comparador.
 
 Existe tambem o arquivo `CONTEXTO_COMPLETO.md`, criado para retomar o projeto em uma conversa nova sem depender do historico completo do chat. Em nova conversa, ler `RETOMADA.md` e `CONTEXTO_COMPLETO.md` antes de mexer no projeto.
 
+## Regra permanente de continuidade
+
+E imprescindivel registrar todo andamento relevante do projeto para proximos chats poderem consultar. Antes de encerrar qualquer conversa em que houver analise, decisao, ajuste, deploy, validacao, erro encontrado, pendencia ou mudanca de regra, atualizar `RETOMADA.md` e, quando mudar contexto geral/instrucao permanente, atualizar tambem `CONTEXTO_COMPLETO.md`.
+
+O registro deve ser claro e datado quando possivel, incluindo:
+
+- o que foi feito ou decidido;
+- arquivos principais alterados;
+- commits, deploys e servicos envolvidos;
+- testes/validacoes realizados;
+- problemas que ficaram pendentes;
+- cuidados para nao repetir erros.
+
+Se houver alteracao publicada ou decisao importante, tambem salvar no GitHub para que a continuidade nao dependa apenas do arquivo local.
+
 Os tokens reais necessarios para Netlify, GitHub e Render foram salvos localmente em `.env.local`. Esse arquivo e ignorado pelo `.gitignore` e nao deve ser enviado ao GitHub, Netlify ou Render. Nao copiar os valores dos tokens para arquivos versionados.
 
 ## Objetivo
