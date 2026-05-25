@@ -84,8 +84,9 @@ async function buildReport(options = {}) {
       }
       for (const license of Object.keys(licenses)) {
         const variant = match.licenses?.[license];
+        const available = variant?.available !== false;
         licenses[license].competitors[competitor.id] = {
-          price: variant?.price ?? null,
+          price: available ? (variant?.price ?? null) : null,
           url: match.url,
           title: match.title,
           available: variant?.available,
@@ -1129,7 +1130,8 @@ function parseProductPage(html, url) {
   const image = extractImage(html, url);
   const description = extractDescription(html, text);
   const platform = inferPlatform(title) || inferPlatform(text.slice(0, 120).join(" "));
-  const variants = parseStructuredVariants(html) || parseVariants(text);
+  const pageUnavailable = isUnavailableProductPage(html, text);
+  const variants = applyPageAvailability(parseStructuredVariants(html) || parseVariants(text), pageUnavailable);
 
   return {
     title,
@@ -1162,7 +1164,7 @@ function parseStructuredVariants(html) {
     const price = extractStructuredPrice(block);
     if (price !== null) priceBlocks.set(action.id, {
       price,
-      available: !/\bindisponivel\b|OutOfStock|produto encontra-se indispon/i.test(normalize(block) + block)
+      available: !isUnavailableText(`${normalize(block)} ${block}`)
     });
   });
 
@@ -1180,6 +1182,23 @@ function parseStructuredVariants(html) {
   }
 
   return mapped ? licenses : null;
+}
+
+function applyPageAvailability(licenses, pageUnavailable) {
+  if (!licenses || !pageUnavailable) return licenses;
+  for (const license of Object.values(licenses)) {
+    if (typeof license.price === "number") license.available = false;
+  }
+  return licenses;
+}
+
+function isUnavailableProductPage(html, lines = []) {
+  const text = Array.isArray(lines) ? lines.join(" ") : String(lines || "");
+  return isUnavailableText(`${normalize(text)} ${html}`);
+}
+
+function isUnavailableText(value) {
+  return /\bindisponivel\b|outofstock|produto encontra se indispon|produto encontra-se indispon|avise.*quando chegar|avisaremos quando chegar|sem estoque|esgotad[oa]/i.test(String(value || ""));
 }
 
 function extractStructuredPrice(block) {
