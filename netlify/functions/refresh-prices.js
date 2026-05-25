@@ -1183,7 +1183,7 @@ function parseStructuredVariants(html) {
     const price = extractStructuredPrice(block);
     if (price !== null) priceBlocks.set(action.id, {
       price,
-      available: !isUnavailableText(`${normalize(block)} ${block}`)
+      available: !isUnavailableText(htmlToLines(block).join(" "))
     });
   });
 
@@ -1228,11 +1228,15 @@ function applyPlatformPageAvailability(platformLicenses, pageUnavailable) {
 
 function isUnavailableProductPage(html, lines = []) {
   const text = Array.isArray(lines) ? lines.join(" ") : String(lines || "");
-  return isUnavailableText(`${normalize(text)} ${html}`);
+  return isUnavailableText(text) || hasStructuredOutOfStock(html);
 }
 
 function isUnavailableText(value) {
-  return /\bindisponivel\b|outofstock|produto encontra se indispon|produto encontra-se indispon|avise.*quando chegar|avisaremos quando chegar|sem estoque|esgotad[oa]/i.test(String(value || ""));
+  return /produto encontra se indispon|produto encontra-se indispon|avise.*quando chegar|avisaremos quando chegar|sem estoque|esgotad[oa]/i.test(normalize(value));
+}
+
+function hasStructuredOutOfStock(html) {
+  return /itemprop=["']availability["'][^>]+(?:outofstock|out-of-stock)|availability["']?\s*:\s*["'][^"']*(?:outofstock|out-of-stock)/i.test(String(html || ""));
 }
 
 function extractStructuredPrice(block) {
