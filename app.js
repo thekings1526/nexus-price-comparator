@@ -223,10 +223,10 @@ function isCompetitorPriceCountable(item, competitorId, value) {
 
 function competitorAutoIgnoreReason(item, value) {
   if (!value) return "";
-  if (value.available === false) return "Indisponivel - ignorado no calculo";
-  if (hasPlatformMismatch(item, value)) return "Plataforma diferente - ignorado no calculo";
-  if (hasF1ManagerMismatch(item, value)) return "F1 Manager e outro jogo - ignorado no calculo";
-  if (hasDlcSubtitleMismatch(item, value)) return "DLC/expansao diferente - ignorado no calculo";
+  if (value.available === false) return "Indisponível - ignorado no cálculo";
+  if (hasPlatformMismatch(item, value)) return "Plataforma diferente - ignorado no cálculo";
+  if (hasF1ManagerMismatch(item, value)) return "F1 Manager é outro jogo - ignorado no cálculo";
+  if (hasDlcSubtitleMismatch(item, value)) return "DLC/expansão diferente - ignorado no cálculo";
   return "";
 }
 
@@ -327,7 +327,7 @@ function renderRows(entries) {
 }
 
 function renderRow(entry) {
-  const licenseLabel = entry.license === "primary" ? "Primaria" : "Secundaria";
+  const licenseLabel = entry.license === "primary" ? "Primária" : "Secundária";
   const licenseClass = entry.license === "primary" ? "license-primary" : "license-secondary";
   const statusLabel = {
     expensive: "Acima do mercado",
@@ -359,7 +359,7 @@ function renderRow(entry) {
         </div>
         <div class="price-box">
           <span>Melhor concorrente</span>
-          <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
+          <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preço"}</strong>
           ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
         </div>
         <div class="price-box price-box-diff">
@@ -422,7 +422,7 @@ function renderCompetitors(entry) {
     const bestClass = !ignored && entry.best?.id === competitor.id ? " best" : "";
     const missingClass = value?.price && !ignored ? "" : " missing";
     const autoNote = competitorAutoIgnoreReason(entry.item, value);
-    const note = autoNote || (ignored ? "Ignorado no calculo" : (entry.best?.id === competitor.id ? "Menor preco" : ""));
+    const note = autoNote || (ignored ? "Ignorado no cálculo" : (entry.best?.id === competitor.id ? "Menor preço" : ""));
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
@@ -440,7 +440,7 @@ function renderCompetitors(entry) {
         ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Origem</a>` : ""}
       </div>
       ${comparedTitle ? `<span class="competitor-title" title="${escapeAttr(value?.title || comparedTitle)}">${escapeHtml(comparedTitle)}</span>` : ""}
-      <strong>${value?.price && !ignored ? formatPrice(value.price) : "Sem preco"}</strong>
+      <strong>${value?.price && !ignored ? formatPrice(value.price) : "Sem preço"}</strong>
       ${note ? `<small>${note}</small>` : ""}
       <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
       ${actionMarkup}
@@ -536,7 +536,7 @@ async function saveReviewDecision(payload, button, options = {}) {
       body: JSON.stringify(payload)
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || "Nao consegui salvar");
+    if (!response.ok) throw new Error(result.error || "Não consegui salvar");
     const serverApplied = applyServerReviewDecisions(result.overrides?.appliedDecisions || []);
     if (!optimistic) {
       applyLocalReviewDecision(payload);
@@ -547,7 +547,7 @@ async function saveReviewDecision(payload, button, options = {}) {
     if (button) button.textContent = "Salvo";
     setTimeout(loadSavedReport, 1800);
   } catch (error) {
-    if (!silent) window.alert(error.message || "Nao consegui salvar a revisao.");
+    if (!silent) window.alert(error.message || "Não consegui salvar a revisão.");
     setTimeout(loadSavedReport, 300);
     if (button) button.textContent = original;
   } finally {
@@ -637,8 +637,8 @@ function applyReviewDecisionToItem(item, payload) {
       ...(competitor.review || {}),
       status: isMissing ? "missing-today" : isWrong ? "wrong" : "confirmed",
       confidence: isMissing || isWrong ? 1 : 100,
-      label: isMissing ? "Sem produto hoje" : isWrong ? "Marcado incorreto" : "Confirmado por voce",
-      reasons: isMissing ? ["Marcado como ausente nesta revisao"] : isWrong ? ["Voce marcou este par como errado"] : ["Vinculo salvo manualmente"]
+      label: isMissing ? "Sem produto hoje" : isWrong ? "Marcado incorreto" : "Confirmado por você",
+      reasons: isMissing ? ["Marcado como ausente nesta revisão"] : isWrong ? ["Você marcou este par como errado"] : ["Vínculo salvo manualmente"]
     };
     if ((payload.action === "choose" || payload.action === "confirm") && payload.competitorUrl) competitor.url = payload.competitorUrl;
     if (isMissing || isWrong) competitor.available = false;
@@ -743,7 +743,7 @@ async function openReviewModal(context, query = "") {
   state.review.modalContext = { ...context, query };
   state.review.requestKey = requestKey;
   elements.reviewModal.hidden = false;
-  elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: corrigir vinculo`;
+  elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: corrigir vínculo`;
   if (state.review.candidatesCache.has(requestKey)) {
     renderReviewCandidates(state.review.candidatesCache.get(requestKey));
   } else {
@@ -775,17 +775,17 @@ function renderReviewCandidates(payload) {
       <div>
         <strong>${escapeHtml(own.title)}</strong>
         <span>${escapeHtml(own.platform || "Plataforma")}</span>
-        <small>Nexus: Primaria ${formatPrice(own.licenses?.primary?.price)} | Secundaria ${formatPrice(own.licenses?.secondary?.price)}</small>
+        <small>Nexus: Primária ${formatPrice(own.licenses?.primary?.price)} | Secundária ${formatPrice(own.licenses?.secondary?.price)}</small>
       </div>
     </div>
     <form class="review-search">
       <input name="query" type="search" value="${escapeAttr(query)}" placeholder="Pesquisar no concorrente" autofocus>
       <button type="submit">Pesquisar</button>
-      <button type="button" data-modal-action="missing-today">Nao tem no concorrente hoje</button>
+      <button type="button" data-modal-action="missing-today">Não tem no concorrente hoje</button>
     </form>
     <div class="candidate-list">
       ${payload.loading
-        ? '<div class="empty-state">Carregando sugestoes do concorrente...</div>'
+        ? '<div class="empty-state">Carregando sugestões do concorrente...</div>'
         : candidates.length ? candidates.map(renderCandidate).join("") : '<div class="empty-state">Nenhum candidato encontrado. Pesquise pelo nome usado no site do concorrente.</div>'}
     </div>
   `;
@@ -801,11 +801,11 @@ function renderCandidate(candidate) {
       <div>
         <a href="${candidate.url}" target="_blank" rel="noreferrer">${escapeHtml(candidate.title)}</a>
         <small>${escapeHtml(candidate.platform || "")}</small>
-        <small>Primaria ${formatPrice(candidate.licenses?.primary?.price)} | Secundaria ${formatPrice(candidate.licenses?.secondary?.price)}</small>
+        <small>Primária ${formatPrice(candidate.licenses?.primary?.price)} | Secundária ${formatPrice(candidate.licenses?.secondary?.price)}</small>
         <small>IA observadora: ${confidence}% - ${escapeHtml(reasons)}</small>
       </div>
       <button type="button" data-modal-action="choose-candidate" data-candidate-key="${escapeAttr(candidateKey)}" data-candidate-url="${escapeAttr(candidate.url)}">Usar este</button>
-      <button type="button" data-modal-action="reject-candidate" data-candidate-key="${escapeAttr(candidateKey)}" data-candidate-url="${escapeAttr(candidate.url)}">Nao e este</button>
+      <button type="button" data-modal-action="reject-candidate" data-candidate-key="${escapeAttr(candidateKey)}" data-candidate-url="${escapeAttr(candidate.url)}">Não é este</button>
     </article>
   `;
 }
@@ -893,7 +893,7 @@ async function fetchReviewCandidates(context, query = "") {
   const request = fetch(`/api/review-candidates?${params}`, { cache: "no-store" })
     .then(async (response) => {
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Nao consegui carregar candidatos");
+      if (!response.ok) throw new Error(payload.error || "Não consegui carregar candidatos");
       state.review.candidatesCache.set(requestKey, payload);
       return payload;
     })
@@ -945,7 +945,7 @@ async function triggerWorkerRun() {
   try {
     const response = await fetch("/api/trigger-refresh", { method: "POST" });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || "Nao consegui iniciar a coleta");
+    if (!response.ok) throw new Error(payload.error || "Não consegui iniciar a coleta");
     elements.syncStatus.textContent = "Coleta iniciada";
     elements.syncDetails.textContent = "O progresso aparecera aqui enquanto o worker salvar os lotes.";
     setTimeout(loadSavedReport, 5000);
@@ -966,12 +966,12 @@ function renderSyncStatus() {
   elements.syncProgress.style.width = `${percent}%`;
 
   if (status?.status === "running") {
-    elements.syncStatus.textContent = isStaleStatus(status) ? "Coleta parcial salva" : "Atualizacao em andamento";
+    elements.syncStatus.textContent = isStaleStatus(status) ? "Coleta parcial salva" : "Atualização em andamento";
     elements.syncDetails.textContent = `${done} de ${total} itens processados`;
     return;
   }
   if (status?.status === "error") {
-    elements.syncStatus.textContent = "Ultima atualizacao falhou";
+    elements.syncStatus.textContent = "Última atualização falhou";
     elements.syncDetails.textContent = status.message || "Verifique o worker de coleta.";
     return;
   }
@@ -998,7 +998,7 @@ function valueOrNegativeInfinity(value) {
 }
 
 function formatPrice(value) {
-  return typeof value === "number" ? money.format(value) : "Sem preco";
+  return typeof value === "number" ? money.format(value) : "Sem preço";
 }
 
 function formatDiff(value) {
