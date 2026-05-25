@@ -20,7 +20,7 @@ exports.handler = async (event) => {
     const payload = await safeJson(response);
     if (!response.ok) {
       return json({
-        error: payload?.message || "Nao consegui iniciar a coleta no Render",
+        error: payload?.message || "Não consegui iniciar a coleta no Render",
         details: payload
       }, response.status);
     }
