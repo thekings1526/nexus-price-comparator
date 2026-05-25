@@ -83,7 +83,8 @@ async function buildReport(options = {}) {
         continue;
       }
       for (const license of Object.keys(licenses)) {
-        const variant = match.licenses?.[license];
+        const competitorLicenses = licensesForPlatform(match, ownProduct.platform);
+        const variant = competitorLicenses?.[license];
         const available = variant?.available !== false;
         licenses[license].competitors[competitor.id] = {
           price: available ? (variant?.price ?? null) : null,
@@ -792,7 +793,14 @@ function bestValidatedProduct(validated) {
 }
 
 function hasAnyLicensePrice(product) {
-  return ["primary", "secondary"].some((license) => typeof product?.licenses?.[license]?.price === "number");
+  if (["primary", "secondary"].some((license) => typeof product?.licenses?.[license]?.price === "number")) return true;
+  return Object.values(product?.platformLicenses || {})
+    .some((licenses) => ["primary", "secondary"].some((license) => typeof licenses?.[license]?.price === "number"));
+}
+
+function licensesForPlatform(product, platform) {
+  const key = platformKey(platform);
+  return product?.platformLicenses?.[key] || product?.licenses || {};
 }
 
 function buildReviewInsight(ownProduct, competitorId, match, result, overrides) {
@@ -932,7 +940,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
         title: product.title,
         image: product.image,
         platform: product.platform,
-        licenses: product.licenses,
+        licenses: licensesForPlatform(product, ownProduct.platform),
         score,
         review: buildReviewInsight(ownProduct, competitor.id, product, { source: "candidate", decision }, overrides)
       };
@@ -1131,7 +1139,9 @@ function parseProductPage(html, url) {
   const description = extractDescription(html, text);
   const platform = inferPlatform(title) || inferPlatform(text.slice(0, 120).join(" "));
   const pageUnavailable = isUnavailableProductPage(html, text);
-  const variants = applyPageAvailability(parseStructuredVariants(html) || parseVariants(text), pageUnavailable);
+  const parsedVariants = normalizeParsedVariants(parseStructuredVariants(html) || parseVariants(text));
+  const variants = applyPageAvailability(parsedVariants.licenses, pageUnavailable);
+  const platformLicenses = applyPlatformPageAvailability(parsedVariants.platformLicenses, pageUnavailable);
 
   return {
     title,
@@ -1139,7 +1149,16 @@ function parseProductPage(html, url) {
     image,
     description,
     platform,
-    licenses: variants
+    licenses: variants,
+    platformLicenses
+  };
+}
+
+function normalizeParsedVariants(parsed) {
+  if (!parsed?.licenses) return { licenses: parsed, platformLicenses: {} };
+  return {
+    licenses: parsed.licenses,
+    platformLicenses: parsed.platformLicenses || {}
   };
 }
 
@@ -1169,6 +1188,7 @@ function parseStructuredVariants(html) {
   });
 
   const licenses = { primary: { price: null }, secondary: { price: null } };
+  const platformLicenses = {};
   let mapped = 0;
   for (const option of options) {
     if (isRental(option.name)) continue;
@@ -1178,10 +1198,16 @@ function parseStructuredVariants(html) {
     if (!payload || typeof payload.price !== "number") continue;
     licenses[license].price = payload.price;
     licenses[license].available = payload.available;
+    const optionPlatform = platformKey(inferPlatform(option.name));
+    if (optionPlatform) {
+      platformLicenses[optionPlatform] = platformLicenses[optionPlatform] || { primary: { price: null }, secondary: { price: null } };
+      platformLicenses[optionPlatform][license].price = payload.price;
+      platformLicenses[optionPlatform][license].available = payload.available;
+    }
     mapped += 1;
   }
 
-  return mapped ? licenses : null;
+  return mapped ? { licenses, platformLicenses } : null;
 }
 
 function applyPageAvailability(licenses, pageUnavailable) {
@@ -1190,6 +1216,14 @@ function applyPageAvailability(licenses, pageUnavailable) {
     if (typeof license.price === "number") license.available = false;
   }
   return licenses;
+}
+
+function applyPlatformPageAvailability(platformLicenses, pageUnavailable) {
+  if (!platformLicenses || !pageUnavailable) return platformLicenses || {};
+  for (const licenses of Object.values(platformLicenses)) {
+    applyPageAvailability(licenses, pageUnavailable);
+  }
+  return platformLicenses;
 }
 
 function isUnavailableProductPage(html, lines = []) {
@@ -1641,6 +1675,17 @@ function platformsIn(value) {
   if (/xbox one/.test(text)) platforms.add("xbox one");
   if (/switch/.test(text)) platforms.add("switch");
   return platforms;
+}
+
+function platformKey(value) {
+  const text = normalize(value);
+  if (/\bps5\b|playstation 5/.test(text)) return "ps5";
+  if (/\bps4\b|playstation 4/.test(text)) return "ps4";
+  if (/\bps3\b|playstation 3/.test(text)) return "ps3";
+  if (/xbox series/.test(text)) return "xbox series";
+  if (/xbox one/.test(text)) return "xbox one";
+  if (/switch/.test(text)) return "switch";
+  return "";
 }
 
 function slugify(value) {
