@@ -791,6 +791,175 @@ h1 {
   text-align: center;
 }
 
+.rows {
+  counter-reset: product-row;
+}
+
+.price-row {
+  position: relative;
+  overflow: hidden;
+  grid-template-columns: minmax(360px, 1.05fr) minmax(340px, 0.72fr) minmax(520px, 1.38fr);
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  border-color: #d5deea;
+  background:
+    linear-gradient(90deg, rgba(248, 250, 252, 0.95) 0, rgba(248, 250, 252, 0.95) 34%, #fff 34%, #fff 100%);
+}
+
+.price-row:nth-child(even) {
+  background:
+    linear-gradient(90deg, rgba(244, 247, 251, 0.95) 0, rgba(244, 247, 251, 0.95) 34%, #fff 34%, #fff 100%);
+}
+
+.price-row::before {
+  counter-increment: product-row;
+  content: counter(product-row);
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.card-main,
+.competitor-area {
+  min-height: 100%;
+  border: 1px solid rgba(213, 224, 234, 0.88);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.card-main {
+  padding-left: 44px;
+}
+
+.game-cell {
+  align-items: start;
+}
+
+.game-cell img {
+  width: 82px;
+  height: 82px;
+  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.06);
+}
+
+.game-title {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.28;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.game-meta {
+  margin-top: 9px;
+}
+
+.tag,
+.status-tag {
+  min-height: 24px;
+}
+
+.price-strip {
+  align-content: stretch;
+  gap: 10px;
+}
+
+.price-box {
+  position: relative;
+  align-content: start;
+  min-height: 92px;
+  padding: 13px 12px 12px;
+  background: #fff;
+}
+
+.price-box::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: #cbd5e1;
+}
+
+.price-box:first-child::before {
+  background: var(--blue);
+}
+
+.price-box:nth-child(2)::before {
+  background: var(--green);
+}
+
+.price-box-diff::before {
+  background: var(--amber);
+}
+
+.price-box strong {
+  font-size: 1.08rem;
+}
+
+.competitor-area {
+  align-content: start;
+  background: #f8fafc;
+}
+
+.competitor-area-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.competitor-area-title::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.competitors {
+  gap: 10px;
+}
+
+.competitor {
+  min-height: 148px;
+  gap: 7px;
+  padding: 10px;
+  border-color: #d5deea;
+  background: #fff;
+}
+
+.competitor.best {
+  box-shadow: inset 0 0 0 1px rgba(117, 224, 167, 0.48);
+}
+
+.competitor-title {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.35em;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.competitor strong {
+  font-size: 0.98rem;
+}
+
+.review-actions {
+  align-self: end;
+}
+
 @media (max-width: 1180px) {
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
