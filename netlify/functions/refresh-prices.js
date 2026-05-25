@@ -1326,6 +1326,8 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   const comparableCandidateTokens = comparableTokenSet(candidateTokens);
   const ownTitleTokens = gameTokens(ownProduct.title);
   const candidateTitleSource = cleanText(`${candidate.text || ""} ${candidate.title || ""}`) || candidate.url || "";
+  const candidateTitlePlatforms = platformsIn(candidateTitleSource);
+  if (ownPlatform && candidateTitlePlatforms.size && !candidateTitlePlatforms.has(ownPlatform)) return 0;
   const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
   const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
   const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
@@ -1334,6 +1336,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasDlcSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -1392,6 +1395,16 @@ function hasF1ManagerMismatch(ownTokens, candidateTokens) {
   const candidateSet = new Set(candidateTokens);
   if (!ownSet.has("f1") || !candidateSet.has("f1")) return false;
   return ownSet.has("manager") !== candidateSet.has("manager");
+}
+
+function hasDlcSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  return DLC_SUBTITLE_TOKEN_GROUPS.some((group) => hasDlcSubtitleGroup(ownSet, group) !== hasDlcSubtitleGroup(candidateSet, group));
+}
+
+function hasDlcSubtitleGroup(tokens, group) {
+  return group.every((alternatives) => alternatives.some((token) => tokens.has(token)));
 }
 
 function titleNumberTokens(tokens) {
@@ -1779,6 +1792,13 @@ const EDITION_TOKENS = new Set([
 ]);
 
 const CALL_OF_DUTY_BASE_TOKENS = new Set(["call", "duty", "cod"]);
+
+const DLC_SUBTITLE_TOKEN_GROUPS = [
+  [["phantom"], ["liberty"]],
+  [["burning"], ["shores"]],
+  [["shadow", "shadows"], ["erdtree"]],
+  [["vessel"], ["hatred"]]
+];
 
 const STRONG_EXTRA_EDITION_TOKENS = new Set([
   "gold",
