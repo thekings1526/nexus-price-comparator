@@ -1874,6 +1874,7 @@ function expandAliases(tokens) {
   if (/grand theft auto/.test(joined)) expanded.push("gta");
   if (/grand theft auto/.test(joined) && (tokens.includes("v") || tokens.includes("5"))) expanded.push("5");
   if (tokens.includes("fifa") || tokens.includes("fc")) expanded.push("fifa", "fc");
+  if (tokens.includes("yotei") || tokens.includes("ytei")) expanded.push("yotei", "ytei");
   return uniqueBy(expanded, (token) => token);
 }
 
