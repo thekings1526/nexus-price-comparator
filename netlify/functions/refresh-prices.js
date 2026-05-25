@@ -1333,6 +1333,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (Array.from(candidateTitleNumbers).some((token) => !ownTitleNumbers.has(token))) return 0;
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
+  if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -1384,6 +1385,13 @@ function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
     return subtitle.every((token) => candidateSet.has(token));
   }
   return true;
+}
+
+function hasF1ManagerMismatch(ownTokens, candidateTokens) {
+  const ownSet = new Set(ownTokens);
+  const candidateSet = new Set(candidateTokens);
+  if (!ownSet.has("f1") || !candidateSet.has("f1")) return false;
+  return ownSet.has("manager") !== candidateSet.has("manager");
 }
 
 function titleNumberTokens(tokens) {
