@@ -212,6 +212,37 @@ Isso foi validado com simulacao e no site publicado.
 - Revisao/teste completo no site publicado em 25/05/2026: painel abriu no navegador interno com cards, precos, concorrentes e botoes; busca por `gta` reduziu para 4 resultados; filtros/ordenacao responderam; modal `Trocar produto` abriu com candidato, precos, IA, `Usar este` e `Nao e este`. APIs validadas: `review-decision` manteve 118 exemplos de aprendizado; `review-candidates` validou `Horizon Forbidden West PS4` com PS4 em score 25 e PS5 em score 0; `EA SPORTS FC 26 - PS4` voltou com precos e `available:true`.
 - Na mesma revisao foi corrigido o falso match `The Dark Pictures Anthology: Season One` contra jogos individuais da franquia. Regra adicionada em `franchiseSubtitleCompatible` com base `DARK_PICTURES_BASE_TOKENS`. Netlify final: `6a13e186f6c248a314680e77`; Render final live no commit `921569c`. Coleta final limpa disparada no Render job `crn-d87t66n7f7vs73dqjnpg-1779687908`; primeiros 10 itens tinham 62 precos em 80 slots.
 
+## Fluxo de publicacao
+
+O projeto usa tres destinos:
+
+- GitHub: fonte de verdade do codigo, repositorio `thekings1526/nexus-price-comparator`.
+- Netlify: painel publicado e funcoes leves.
+- Render: Cron Job `nexus-price-worker` que roda `npm run worker:refresh`.
+
+Tokens ficam somente em `.env.local`. As chaves locais existentes sao `NETLIFY_SITE_ID`, `NETLIFY_AUTH_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_TOKEN`, `RENDER_CRON_ID` e `RENDER_API_KEY`. Nunca gravar os valores reais em arquivos versionados.
+
+Como o `git` nao esta instalado localmente, quando precisar salvar no GitHub use a API do GitHub com o token local. Atualize os arquivos alterados por API e registre o commit retornado. Se alterar `.github/workflows/*`, o token precisa ter escopo `workflow`; em tentativa anterior o GitHub bloqueou esse arquivo sem esse escopo.
+
+Para publicar na Netlify via API, montar um deploy manual incluindo:
+
+- arquivos estaticos do publish root: `index.html`, `styles.css`, `app.js`, `_redirects`, `netlify.toml` quando necessario;
+- todas as funcoes atuais: `price-report`, `refresh-prices`, `refresh-batch`, `refresh-catalog-background`, `review-candidates`, `review-decision`, `trigger-render-refresh`;
+- zips das funcoes com o `.js` da funcao na raiz do zip, arquivos compartilhados necessarios na raiz quando usados por `require("./refresh-prices")`, e `node_modules` dentro do zip para `@netlify/blobs`.
+
+Ja houve problema quando um deploy subiu sem funcoes, entao nao publicar so os arquivos estaticos. Os artefatos antigos em `.netlify-upload/function-zips-*` mostram o formato correto dos zips. Depois do upload, esperar o deploy ficar publicado e anotar o ID.
+
+Para Render, o deploy do codigo vem do GitHub. Depois que o GitHub estiver atualizado, conferir/aguardar o Render ficar `live` no commit novo quando a mudanca afetar o worker. A coleta pesada normalmente nao roda por agenda diaria: o schedule e `0 8 1 1 *` para quase parar automatico. O uso normal e disparar manualmente pelo painel (`/api/trigger-refresh`) ou pela API do Render criando run no cron `crn-d87t66n7f7vs73dqjnpg`.
+
+Se uma mudanca afetar matching, parser, precos, indisponibilidade, aprendizado ou worker, o fluxo completo e:
+
+1. Validar sintaxe local.
+2. Salvar alteracoes no GitHub.
+3. Publicar Netlify com estaticos e funcoes.
+4. Confirmar Render no commit novo se a coleta depender da alteracao.
+5. Disparar coleta limpa no Render quando for necessario recalcular a base.
+6. Validar o painel publicado e APIs antes de dizer que esta pronto.
+
 ## Validacao obrigatoria antes de finalizar mudancas
 
 Depois de mudancas relevantes:
