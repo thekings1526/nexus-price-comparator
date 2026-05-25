@@ -1039,22 +1039,82 @@ function learnedCandidateAdjustment(ownProduct, candidate, competitorId, reviewO
   const ownSet = comparableTokenSet(ownTokens);
   const candidateSet = comparableTokenSet(candidateTokens);
   const ownFamily = reviewFamilyKey(ownProduct);
+  const candidateFamily = reviewFamilyKey(candidate);
   let adjustment = 0;
 
   for (const example of examples.slice(-500)) {
-    if (example.competitorId !== competitorId) continue;
+    const sameCompetitor = example.competitorId === competitorId;
     const ownSimilarity = learnedTokenSimilarity(ownSet, new Set(example.ownTokens || []));
-    if (ownSimilarity < 0.65 && example.ownFamilyKey !== ownFamily) continue;
+    const sameOwnFamily = example.ownFamilyKey && example.ownFamilyKey === ownFamily;
+    if (sameCompetitor) {
+      if (ownSimilarity < 0.65 && !sameOwnFamily) continue;
+    } else if (!sameOwnFamily && ownSimilarity < 0.85) {
+      continue;
+    }
     const candidateSimilarity = learnedTokenSimilarity(candidateSet, new Set(example.candidateTokens || []));
-    const sameCandidateFamily = example.candidateFamilyKey && example.candidateFamilyKey === reviewFamilyKey(candidate);
+    const sameCandidateFamily = example.candidateFamilyKey && example.candidateFamilyKey === candidateFamily;
     const sameCandidateUrl = normalizeReviewUrl(example.candidateUrl) === normalizeReviewUrl(candidate.url);
     const confidence = Math.max(candidateSimilarity, sameCandidateFamily ? 0.9 : 0, sameCandidateUrl ? 1 : 0);
     if (confidence < 0.65) continue;
-    if (example.action === "positive") adjustment += sameCandidateUrl ? 14 : Math.round(8 * confidence);
-    if (example.action === "negative") adjustment -= sameCandidateUrl ? 30 : Math.round(16 * confidence);
+    if (example.action === "positive") {
+      adjustment += sameCandidateUrl ? 14 : Math.round((sameCompetitor ? 8 : 5) * confidence);
+    }
+    if (example.action === "negative") {
+      adjustment -= sameCandidateUrl ? 30 : Math.round((sameCompetitor ? 16 : 10) * confidence);
+    }
   }
 
+  adjustment += learnedCorrectionContrastAdjustment({
+    examples,
+    ownFamily,
+    ownSet,
+    candidateSet,
+    candidateFamily,
+    candidateTokens
+  });
+
   return clamp(adjustment, -30, 14);
+}
+
+function learnedCorrectionContrastAdjustment({ examples, ownFamily, ownSet, candidateSet, candidateFamily, candidateTokens }) {
+  const relevant = examples.slice(-500).filter((example) => {
+    if (example.ownFamilyKey === ownFamily) return true;
+    return learnedTokenSimilarity(ownSet, new Set(example.ownTokens || [])) >= 0.85;
+  });
+  const positives = relevant.filter((example) => example.action === "positive");
+  const negatives = relevant.filter((example) => example.action === "negative");
+  if (!positives.length || !negatives.length) return 0;
+
+  const positiveFamilies = new Set(positives.map((example) => example.candidateFamilyKey).filter(Boolean));
+  const negativeFamilies = new Set(negatives.map((example) => example.candidateFamilyKey).filter(Boolean));
+  const positiveExtraTokens = learnedExampleTokenSet(positives, "candidateExtraTokens");
+  const negativeExtraTokens = learnedExampleTokenSet(negatives, "candidateExtraTokens");
+  const positiveMissingTokens = learnedExampleTokenSet(positives, "ownMissingTokens");
+  const negativeMissingTokens = learnedExampleTokenSet(negatives, "ownMissingTokens");
+
+  let adjustment = 0;
+  if (positiveFamilies.has(candidateFamily) && !negativeFamilies.has(candidateFamily)) adjustment += 4;
+  if (negativeFamilies.has(candidateFamily) && !positiveFamilies.has(candidateFamily)) adjustment -= 12;
+
+  const candidateExtraTokens = candidateTokens.filter((token) => !ownSet.has(token));
+  const negativeOnlyExtras = candidateExtraTokens.filter((token) => negativeExtraTokens.has(token) && !positiveExtraTokens.has(token));
+  adjustment -= Math.min(12, negativeOnlyExtras.length * 5);
+
+  const candidateMissingOwnTokens = Array.from(ownSet).filter((token) => !candidateSet.has(token));
+  const negativeOnlyMissing = candidateMissingOwnTokens.filter((token) => negativeMissingTokens.has(token) && !positiveMissingTokens.has(token));
+  adjustment -= Math.min(8, negativeOnlyMissing.length * 4);
+
+  return clamp(adjustment, -14, 5);
+}
+
+function learnedExampleTokenSet(examples, key) {
+  const tokens = new Set();
+  for (const example of examples) {
+    for (const token of example?.[key] || []) {
+      if (!LOOSE_TITLE_TOKENS.has(token)) tokens.add(token);
+    }
+  }
+  return tokens;
 }
 
 function learnedTokenSimilarity(leftSet, rightSet) {
