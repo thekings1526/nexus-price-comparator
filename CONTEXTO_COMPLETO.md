@@ -77,6 +77,7 @@ Motivo: o catalogo da Nexus tem mais de 1000 produtos, entao a coleta nao deve d
 - Se marcar um concorrente como "nao tem hoje", isso nao deve bloquear para sempre, pois o nicho e volatil.
 - Se marcar um produto como incorreto, a rejeicao deve ser especifica para aquele link, nao para o concorrente inteiro.
 - Ao marcar primario como correto, secundario do mesmo produto/concorrente tambem deve ser considerado resolvido, e vice-versa.
+- Acoes de revisao manual em um jogo PS4/PS5 devem refletir tambem na variacao irma PS4/PS5 do mesmo jogo, mas usando o link do concorrente ja existente em cada variacao para nao misturar URL de plataforma.
 - Tudo que for importante deve ser salvo em `RETOMADA.md` ou neste arquivo antes de encerrar a conversa.
 - Antes de confirmar qualquer alteracao como feita, deve validar no painel publicado.
 
