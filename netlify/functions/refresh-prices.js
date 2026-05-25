@@ -244,21 +244,43 @@ async function recordReviewDecision(input) {
   const ownUrl = input.ownUrl || input.productUrl;
   const competitorId = input.competitorId;
   if (!ownUrl || !competitorId) throw new Error("Produto e concorrente sao obrigatorios");
+  if ((input.action === "confirm" || input.action === "choose") && !input.competitorUrl) {
+    throw new Error("Link do concorrente e obrigatorio para confirmar");
+  }
 
-  const ownKey = reviewKey(ownUrl);
   const decisions = overrides.decisions || {};
-  const current = decisions[ownKey]?.[competitorId] || {};
   const now = new Date().toISOString();
+  const relatedInputs = await relatedReviewDecisionInputs(input, ownUrl, competitorId).catch(() => ([{
+    ownUrl,
+    competitorUrl: input.competitorUrl || ""
+  }]));
+
+  for (const related of relatedInputs) {
+    const ownKey = reviewKey(related.ownUrl);
+    const current = decisions[ownKey]?.[competitorId] || {};
+    const next = buildReviewDecision(current, input, related, now);
+
+    decisions[ownKey] = {
+      ...(decisions[ownKey] || {}),
+      [competitorId]: next
+    };
+  }
+
+  return saveReviewOverrides({ ...overrides, decisions });
+}
+
+function buildReviewDecision(current, input, related, now) {
+  const competitorUrl = related.competitorUrl || "";
   const next = {
     ...current,
-    ownUrl,
-    competitorId,
+    ownUrl: related.ownUrl,
+    competitorId: input.competitorId,
     updatedAt: now,
     history: [
       ...(current.history || []).slice(-20),
       {
         action: input.action,
-        competitorUrl: input.competitorUrl || "",
+        competitorUrl,
         note: input.note || "",
         createdAt: now
       }
@@ -266,19 +288,18 @@ async function recordReviewDecision(input) {
   };
 
   if (input.action === "confirm" || input.action === "choose") {
-    if (!input.competitorUrl) throw new Error("Link do concorrente e obrigatorio para confirmar");
-    next.confirmedUrl = input.competitorUrl;
+    next.confirmedUrl = competitorUrl;
     next.confirmedAt = now;
     next.noTodayAt = "";
   }
 
   if (input.action === "wrong") {
-    if (input.competitorUrl) {
+    if (competitorUrl) {
       next.rejectedUrls = {
         ...(next.rejectedUrls || {}),
-        [normalizeReviewUrl(input.competitorUrl)]: { rejectedAt: now, note: input.note || "" }
+        [normalizeReviewUrl(competitorUrl)]: { rejectedAt: now, note: input.note || "" }
       };
-      if (normalizeReviewUrl(next.confirmedUrl) === normalizeReviewUrl(input.competitorUrl)) next.confirmedUrl = "";
+      if (normalizeReviewUrl(next.confirmedUrl) === normalizeReviewUrl(competitorUrl)) next.confirmedUrl = "";
     }
   }
 
@@ -286,11 +307,36 @@ async function recordReviewDecision(input) {
     next.noTodayAt = now;
   }
 
-  decisions[ownKey] = {
-    ...(decisions[ownKey] || {}),
-    [competitorId]: next
-  };
-  return saveReviewOverrides({ ...overrides, decisions });
+  return next;
+}
+
+async function relatedReviewDecisionInputs(input, ownUrl, competitorId) {
+  const report = await getSavedReport();
+  const source = (report?.items || []).find((item) => normalizeReviewUrl(item.url) === normalizeReviewUrl(ownUrl));
+  if (!source) return [{ ownUrl, competitorUrl: input.competitorUrl || "" }];
+  const familyKey = reviewFamilyKey(source);
+  if (!familyKey) return [{ ownUrl, competitorUrl: input.competitorUrl || "" }];
+
+  return (report.items || [])
+    .filter((item) => reviewFamilyKey(item) === familyKey)
+    .filter((item) => shouldShareReviewFamily(source, item))
+    .map((item) => {
+      if (normalizeReviewUrl(item.url) === normalizeReviewUrl(ownUrl)) {
+        return { ownUrl: item.url, competitorUrl: input.competitorUrl || "" };
+      }
+      const competitorUrl = reviewCompetitorUrlForItem(item, competitorId);
+      if (input.action !== "missing-today" && !competitorUrl) return null;
+      return { ownUrl: item.url, competitorUrl };
+    })
+    .filter(Boolean);
+}
+
+function reviewCompetitorUrlForItem(item, competitorId) {
+  for (const license of Object.values(item.licenses || {})) {
+    const url = license?.competitors?.[competitorId]?.url;
+    if (url) return url;
+  }
+  return "";
 }
 
 function getReviewDecision(overrides, ownUrl, competitorId) {
@@ -304,6 +350,30 @@ function reviewPenalty(decision, competitorUrl) {
 
 function reviewKey(value) {
   return normalizeReviewUrl(value);
+}
+
+function reviewFamilyKey(item) {
+  const tokens = normalize(item?.title || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !REVIEW_FAMILY_IGNORED_TOKENS.has(token));
+  return tokens.join(" ");
+}
+
+function shouldShareReviewFamily(source, item) {
+  const sourcePlatform = reviewPlatformKey(source);
+  if (sourcePlatform === "ps4" || sourcePlatform === "ps5") {
+    const targetPlatform = reviewPlatformKey(item);
+    return targetPlatform === "ps4" || targetPlatform === "ps5";
+  }
+  return source?.url === item?.url;
+}
+
+function reviewPlatformKey(item) {
+  const text = normalize(`${item?.platform || ""} ${item?.title || ""}`);
+  if (/\bps5\b|playstation 5/.test(text)) return "ps5";
+  if (/\bps4\b|playstation 4/.test(text)) return "ps4";
+  return "";
 }
 
 function normalizeReviewUrl(value) {
@@ -1355,6 +1425,25 @@ const STOP_WORDS = new Set([
   "edicao",
   "versao",
   "psn"
+]);
+
+const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
+  "ps4",
+  "ps5",
+  "ps3",
+  "playstation",
+  "midia",
+  "digital",
+  "primaria",
+  "primario",
+  "primary",
+  "secundaria",
+  "secundario",
+  "secondary",
+  "licenca",
+  "jogo",
+  "game",
+  "games"
 ]);
 
 const LOOSE_TITLE_TOKENS = new Set([
