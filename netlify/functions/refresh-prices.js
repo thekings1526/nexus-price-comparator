@@ -1426,6 +1426,13 @@ function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
     const subtitle = ownTokens.filter((token) => !CALL_OF_DUTY_BASE_TOKENS.has(token) && !/^\d+$/.test(token));
     return subtitle.every((token) => candidateSet.has(token));
   }
+  if (ownSet.has("dark") && ownSet.has("pictures") && ownSet.has("anthology")
+    && candidateSet.has("dark") && candidateSet.has("pictures") && candidateSet.has("anthology")) {
+    const ownSubtitle = ownTokens.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
+    const candidateSubtitle = candidateTokens.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
+    if (!ownSubtitle.length || !candidateSubtitle.length) return true;
+    return ownSubtitle.every((token) => candidateSet.has(token) || candidateSet.has(ROMAN_NUMERALS[token]));
+  }
   return true;
 }
 
@@ -1842,6 +1849,7 @@ const EDITION_TOKENS = new Set([
 ]);
 
 const CALL_OF_DUTY_BASE_TOKENS = new Set(["call", "duty", "cod"]);
+const DARK_PICTURES_BASE_TOKENS = new Set(["dark", "pictures", "anthology"]);
 
 const DLC_SUBTITLE_TOKEN_GROUPS = [
   [["phantom"], ["liberty"]],
