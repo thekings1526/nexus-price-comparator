@@ -3,18 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monitor de Precos Nexus</title>
+    <title>Monitor de Preços Nexus</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <p class="eyebrow">Nexus Games Digital</p>
-        <h1>Monitor de precos</h1>
+        <h1>Monitor de preços</h1>
       </div>
-      <section class="sync-card" aria-label="Status da atualizacao">
+      <section class="sync-card" aria-label="Status da atualização">
         <div>
-          <span class="label">Atualizacao</span>
+          <span class="label">Atualização</span>
           <strong id="syncStatus">Carregando dados</strong>
         </div>
         <div class="progress-track" aria-hidden="true">
@@ -30,7 +30,7 @@
       <section class="control-panel" aria-label="Filtros">
         <div class="section-head">
           <div>
-            <span class="section-label">Analise</span>
+            <span class="section-label">Análise</span>
             <h2>Filtros e ordenacao</h2>
           </div>
           <strong id="resultsCount">0 resultados</strong>
@@ -54,11 +54,11 @@
           </label>
 
           <label class="field">
-            <span>Licenca</span>
+            <span>Licença</span>
             <select id="licenseSelect">
-              <option value="all">Primaria e secundaria</option>
-              <option value="primary">Primaria</option>
-              <option value="secondary">Secundaria</option>
+              <option value="all">Primária e secundária</option>
+              <option value="primary">Primária</option>
+              <option value="secondary">Secundária</option>
             </select>
           </label>
 
@@ -66,12 +66,12 @@
             <span>Ordenar por</span>
             <select id="sortSelect">
               <option value="status">Prioridade de ajuste</option>
-              <option value="gapRisk">Maior risco de preco alto</option>
-              <option value="gapAdvantage">Maior vantagem de preco</option>
-              <option value="mineAsc">Menor preco Nexus</option>
-              <option value="mineDesc">Maior preco Nexus</option>
-              <option value="competitorAsc">Menor preco concorrente</option>
-              <option value="competitorDesc">Maior preco concorrente</option>
+              <option value="gapRisk">Maior risco de preço alto</option>
+              <option value="gapAdvantage">Maior vantagem de preço</option>
+              <option value="mineAsc">Menor preço Nexus</option>
+              <option value="mineDesc">Maior preço Nexus</option>
+              <option value="competitorAsc">Menor preço concorrente</option>
+              <option value="competitorDesc">Maior preço concorrente</option>
               <option value="nameAsc">Jogo A-Z</option>
               <option value="nameDesc">Jogo Z-A</option>
             </select>
@@ -86,11 +86,11 @@
 
       <section class="summary-grid" id="summaryGrid" aria-label="Resumo"></section>
 
-      <section class="board" aria-label="Tabela de precos">
+      <section class="board" aria-label="Tabela de preços">
         <div class="board-header">
           <div>
             <span class="section-label">Produtos</span>
-            <h2>Comparacao por licenca</h2>
+            <h2>Comparação por licença</h2>
           </div>
           <span id="boardMeta">Carregando</span>
         </div>
@@ -107,7 +107,7 @@
     </main>
 
     <div class="modal-backdrop" id="reviewModal" hidden>
-      <section class="review-modal" role="dialog" aria-modal="true" aria-label="Revisao de concorrente">
+      <section class="review-modal" role="dialog" aria-modal="true" aria-label="Revisão de concorrente">
         <header class="review-modal-head">
           <div>
             <span class="label">Revisao</span>
