@@ -204,6 +204,7 @@ Isso foi validado com simulacao e no site publicado.
 - Sempre atualizar `RETOMADA.md` ou este arquivo com decisoes importantes.
 - A inconsistencia `items 1038` contra `totalItems 1039` foi atribuida provavelmente a merge antigo por `item.id`. O worker deve unir lotes por URL normalizada e, em retomada parcial, deve calcular os itens restantes pelas URLs ainda nao processadas. A correcao foi publicada na Netlify no deploy `6a1212cf572cfacd1f813b92`, mas a base visivel so muda apos nova coleta limpa no Render.
 - Produto Nexus sem titulo legivel deve parar a coleta com erro mostrando o link, nao ser pulado silenciosamente.
+- Em 25/05/2026 uma auditoria geral das comparacoes salvas encontrou 118 exemplos de aprendizado em `match-overrides.learning` (114 positivos e 4 negativos) e 6 linhas com erro forte no relatorio atual: `Horizon Forbidden West PS4` apontando para produto PS5 da NGCP e `F1 22/F1 23` normais apontando para `F1 Manager` na Coelho/NGCP. A regra de matching passou a bloquear `F1` normal contra `F1 Manager`, e o painel passou a ignorar imediatamente no calculo pares automaticos com conflito claro de plataforma ou `F1 Manager`. Confirmacoes manuais continuam tendo prioridade sobre essas travas automaticas, exceto indisponibilidade, que segue fora do calculo.
 
 ## Validacao obrigatoria antes de finalizar mudancas
 
