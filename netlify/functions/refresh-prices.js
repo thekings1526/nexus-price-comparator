@@ -1183,7 +1183,7 @@ function parseStructuredVariants(html) {
     const price = extractStructuredPrice(block);
     if (price !== null) priceBlocks.set(action.id, {
       price,
-      available: !isUnavailableText(htmlToLines(block).join(" "))
+      available: true
     });
   });
 
@@ -1227,8 +1227,9 @@ function applyPlatformPageAvailability(platformLicenses, pageUnavailable) {
 }
 
 function isUnavailableProductPage(html, lines = []) {
-  const text = Array.isArray(lines) ? lines.join(" ") : String(lines || "");
-  return isUnavailableText(text) || hasStructuredOutOfStock(html);
+  const visibleLines = Array.isArray(lines) ? lines : String(lines || "").split(/\s*\n\s*/);
+  const relevantText = visibleLines.slice(0, 140).join(" ");
+  return isUnavailableText(relevantText) || hasStructuredOutOfStock(html);
 }
 
 function isUnavailableText(value) {
