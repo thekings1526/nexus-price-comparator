@@ -1428,8 +1428,9 @@ function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
   }
   if (ownSet.has("dark") && ownSet.has("pictures") && ownSet.has("anthology")
     && candidateSet.has("dark") && candidateSet.has("pictures") && candidateSet.has("anthology")) {
+    const candidateList = Array.from(candidateTokens);
     const ownSubtitle = ownTokens.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
-    const candidateSubtitle = candidateTokens.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
+    const candidateSubtitle = candidateList.filter((token) => !DARK_PICTURES_BASE_TOKENS.has(token) && !LOOSE_TITLE_TOKENS.has(token) && !/^\d+$/.test(ROMAN_NUMERALS[token] || token));
     if (!ownSubtitle.length || !candidateSubtitle.length) return true;
     return ownSubtitle.every((token) => candidateSet.has(token) || candidateSet.has(ROMAN_NUMERALS[token]));
   }
