@@ -524,6 +524,7 @@ h1 {
 }
 
 .competitor-name,
+.competitor-title,
 .competitor small {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -547,6 +548,13 @@ h1 {
 .competitor strong {
   font-size: 0.88rem;
   line-height: 1.1;
+}
+
+.competitor-title {
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .competitor small {
