@@ -254,6 +254,7 @@ async function recordReviewDecision(input) {
     ownUrl,
     competitorUrl: input.competitorUrl || ""
   }]));
+  const appliedDecisions = [];
 
   for (const related of relatedInputs) {
     const ownKey = reviewKey(related.ownUrl);
@@ -264,9 +265,17 @@ async function recordReviewDecision(input) {
       ...(decisions[ownKey] || {}),
       [competitorId]: next
     };
+    appliedDecisions.push({
+      action: input.action,
+      ownUrl: related.ownUrl,
+      competitorId,
+      competitorUrl: related.competitorUrl || "",
+      savedAt: now
+    });
   }
 
-  return saveReviewOverrides({ ...overrides, decisions });
+  const saved = await saveReviewOverrides({ ...overrides, decisions });
+  return { ...saved, appliedDecisions };
 }
 
 function buildReviewDecision(current, input, related, now) {
@@ -317,18 +326,24 @@ async function relatedReviewDecisionInputs(input, ownUrl, competitorId) {
   const familyKey = reviewFamilyKey(source);
   if (!familyKey) return [{ ownUrl, competitorUrl: input.competitorUrl || "" }];
 
-  return (report.items || [])
+  const related = [];
+  for (const item of (report.items || [])
     .filter((item) => reviewFamilyKey(item) === familyKey)
-    .filter((item) => shouldShareReviewFamily(source, item))
-    .map((item) => {
-      if (normalizeReviewUrl(item.url) === normalizeReviewUrl(ownUrl)) {
-        return { ownUrl: item.url, competitorUrl: input.competitorUrl || "" };
-      }
-      const competitorUrl = reviewCompetitorUrlForItem(item, competitorId);
-      if (input.action !== "missing-today" && !competitorUrl) return null;
-      return { ownUrl: item.url, competitorUrl };
-    })
-    .filter(Boolean);
+    .filter((item) => shouldShareReviewFamily(source, item))) {
+    if (normalizeReviewUrl(item.url) === normalizeReviewUrl(ownUrl)) {
+      related.push({ ownUrl: item.url, competitorUrl: input.competitorUrl || "" });
+      continue;
+    }
+
+    let competitorUrl = "";
+    if (input.action === "choose") {
+      competitorUrl = await findRelatedChosenCompetitorUrl(input, source, item, competitorId).catch(() => "");
+    }
+    if (!competitorUrl) competitorUrl = reviewCompetitorUrlForItem(item, competitorId);
+    if (input.action !== "missing-today" && !competitorUrl) continue;
+    related.push({ ownUrl: item.url, competitorUrl });
+  }
+  return related;
 }
 
 function reviewCompetitorUrlForItem(item, competitorId) {
@@ -337,6 +352,48 @@ function reviewCompetitorUrlForItem(item, competitorId) {
     if (url) return url;
   }
   return "";
+}
+
+async function findRelatedChosenCompetitorUrl(input, sourceItem, targetItem, competitorId) {
+  const competitor = COMPETITORS.find((item) => item.id === competitorId);
+  if (!competitor) return "";
+  const sourcePlatform = reviewPlatformKey(sourceItem);
+  const targetPlatform = reviewPlatformKey(targetItem);
+  if (!sourcePlatform || !targetPlatform || sourcePlatform === targetPlatform) return "";
+
+  const targetProduct = normalizeManualItem(targetItem);
+  const catalog = await discoverCompetitorCatalog(competitor);
+  const targetQuery = relatedPlatformQuery(input.candidate?.title || input.competitorUrl || targetProduct.title, targetPlatform);
+  const parsedCache = new Map();
+  const ranked = uniqueBy(catalog, (item) => item.url)
+    .map((link) => {
+      const queryScore = targetQuery ? queryCandidateScore(link, targetQuery) : 0;
+      const matchScore = scoreCandidate(link, targetProduct, { preview: true });
+      return { ...link, score: matchScore + queryScore };
+    })
+    .filter((link) => link.score >= 5)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Number(process.env.CATALOG_CANDIDATE_LIMIT || 8));
+
+  const validated = [];
+  for (const candidate of ranked) {
+    try {
+      const product = await getParsedCompetitorProduct(candidate.url, parsedCache);
+      const score = scoreCandidate(product, targetProduct);
+      if (score >= 16) validated.push({ product, score: score + queryCandidateScore(product, targetQuery) });
+    } catch {
+      // Keep looking for the related platform product.
+    }
+  }
+  return bestValidatedProduct(validated)?.url || "";
+}
+
+function relatedPlatformQuery(value, targetPlatform) {
+  const label = targetPlatform === "ps5" ? "PS5" : targetPlatform === "ps4" ? "PS4" : "";
+  const number = targetPlatform === "ps5" ? "5" : targetPlatform === "ps4" ? "4" : "";
+  return cleanSearchQuery(cleanText(value || "")
+    .replace(/\bps[45]\b/gi, label || "$&")
+    .replace(/playstation\s*[45]/gi, number ? `PlayStation ${number}` : "$&"));
 }
 
 function getReviewDecision(overrides, ownUrl, competitorId) {
