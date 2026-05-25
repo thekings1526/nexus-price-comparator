@@ -368,6 +368,7 @@ function renderCompetitors(entry) {
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
+    const comparedTitle = competitorComparisonTitle(value);
     const manualState = manualReviewState(entry.item.url, competitor.id, review);
     const actionMarkup = manualState.done ? renderResolvedReviewAction(entry, competitor, value, manualState) : `
       <span class="review-actions">
@@ -380,6 +381,7 @@ function renderCompetitors(entry) {
         <span class="competitor-name">${competitor.name}</span>
         ${value?.url ? `<a class="source-link" href="${value.url}" target="_blank" rel="noreferrer">Origem</a>` : ""}
       </div>
+      ${comparedTitle ? `<span class="competitor-title" title="${escapeAttr(value?.title || comparedTitle)}">${escapeHtml(comparedTitle)}</span>` : ""}
       <strong>${value?.price && !ignored ? formatPrice(value.price) : "Sem preco"}</strong>
       ${note ? `<small>${note}</small>` : ""}
       <small class="review-pill${reviewClass}">${escapeHtml(reviewText)}</small>
@@ -389,6 +391,21 @@ function renderCompetitors(entry) {
       ${content}
     </div>`;
   }).join("");
+}
+
+function competitorComparisonTitle(value) {
+  const raw = cleanComparisonTitle(value?.title || "");
+  if (raw) return raw;
+  return cleanComparisonTitle(titleFromUrl(value?.url || ""));
+}
+
+function cleanComparisonTitle(value) {
+  return String(value || "")
+    .replace(/\s*[-|–—]\s*(ps4|ps5|playstation\s*[45]).*$/i, "")
+    .replace(/\s*\((ps4|ps5|playstation\s*[45])\).*$/i, "")
+    .replace(/\s*\b(ps4|ps5|playstation\s*[45])\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function renderResolvedReviewAction(entry, competitor, value, manualState) {
@@ -945,6 +962,21 @@ function normalizeSearchText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function titleFromUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.pathname
+      .split("/")
+      .filter(Boolean)
+      .pop()
+      ?.replace(/-/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "";
+  } catch {
+    return "";
+  }
 }
 
 function isStaleStatus(status) {
