@@ -15,6 +15,7 @@ const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
   "ps3",
   "playstation",
   "midia",
+  "dia",
   "digital",
   "primaria",
   "primario",
@@ -571,16 +572,20 @@ function applyServerReviewDecisions(decisions) {
   let changed = false;
   for (const decision of decisions) {
     if (!decision?.ownUrl || !decision?.competitorId) continue;
+    const key = reviewDecisionKey(decision.ownUrl, decision.competitorId);
+    const existing = state.reviewDecisions[key];
+    const preservedCandidate = sameReviewUrl(existing?.competitorUrl, decision.competitorUrl)
+      ? existing?.candidate
+      : null;
     const payload = {
       action: decision.action,
       ownUrl: decision.ownUrl,
       competitorId: decision.competitorId,
-      competitorUrl: decision.competitorUrl || ""
+      competitorUrl: decision.competitorUrl || "",
+      candidate: decision.candidate || preservedCandidate || null
     };
-    const key = reviewDecisionKey(payload.ownUrl, payload.competitorId);
     state.reviewDecisions[key] = {
       ...payload,
-      candidate: null,
       savedAt: decision.savedAt || new Date().toISOString()
     };
     const item = (state.report.items || []).find((product) => product.url === payload.ownUrl);
