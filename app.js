@@ -200,6 +200,7 @@ function invalidateEntries() {
 
 function isCompetitorPriceCountable(ownUrl, competitorId, value) {
   if (!value || typeof value.price !== "number") return false;
+  if (value.available === false) return false;
   const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
   if (local && shouldApplyStoredDecision(state.report, local)) {
     if (local.action === "missing-today") return false;
@@ -364,7 +365,7 @@ function renderCompetitors(entry) {
     const ignored = value && !isCompetitorPriceCountable(entry.item.url, competitor.id, value);
     const bestClass = !ignored && entry.best?.id === competitor.id ? " best" : "";
     const missingClass = value?.price && !ignored ? "" : " missing";
-    const note = ignored ? "Ignorado no calculo" : value?.available === false ? "Indisponivel" : (entry.best?.id === competitor.id ? "Menor preco" : "");
+    const note = value?.available === false ? "Indisponivel - ignorado no calculo" : ignored ? "Ignorado no calculo" : (entry.best?.id === competitor.id ? "Menor preco" : "");
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
