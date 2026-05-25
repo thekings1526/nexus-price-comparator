@@ -62,7 +62,7 @@ async function main() {
       offset: startOffset,
       totalItems: catalogItems.length,
       items: merged.items.length,
-      message: `Retomando comparacao. Catalogos: ${catalogSummary}`
+      message: `Retomando comparação. Catálogos: ${catalogSummary}`
     });
   }
 
@@ -92,7 +92,7 @@ async function main() {
     batchSize: BATCH_SIZE,
     totalItems: catalogItems.length,
     items: merged.items.length,
-    message: "Atualizacao diaria finalizada"
+    message: "Atualização diária finalizada"
   });
 }
 
@@ -157,12 +157,12 @@ async function buildReportWithRetry(context) {
         offset: context.startOffset,
         batchSize: BATCH_SIZE,
         totalItems: context.totalItems,
-        message: `Tentativa ${attempt}/${ITEM_RETRIES} falhou durante a comparacao`
+        message: `Tentativa ${attempt}/${ITEM_RETRIES} falhou durante a comparação`
       }).catch(() => null);
       await sleep(retryDelay(attempt));
     }
   }
-  throw new Error(`Coleta parada durante a comparacao. Causa: ${lastError?.message || lastError}`);
+  throw new Error(`Coleta parada durante a comparação. Causa: ${lastError?.message || lastError}`);
 }
 
 function retryDelay(attempt) {
@@ -222,7 +222,7 @@ if (require.main === module) {
     await saveReportWithStatus(await baseReport(), {
       status: "error",
       failedAt: new Date().toISOString(),
-      message: error.message || "Erro na atualizacao diaria"
+      message: error.message || "Erro na atualização diária"
     }).catch(() => null);
     process.exit(1);
   });
