@@ -288,7 +288,146 @@ async function recordReviewDecision(input) {
 
   const learning = await buildReviewLearning(overrides, input, relatedInputs, now).catch(() => overrides.learning || defaultReviewLearning());
   const saved = await saveReviewOverrides({ ...overrides, decisions, learning });
-  return { ...saved, appliedDecisions };
+  const reportUpdates = await applyReviewDecisionToSavedReport(input, relatedInputs, now).catch(() => []);
+  return {
+    ...saved,
+    appliedDecisions: appliedDecisions.map((decision) => ({
+      ...decision,
+      candidate: reportUpdates.find((item) => item.ownUrl === decision.ownUrl && item.competitorId === decision.competitorId)?.candidate || null
+    }))
+  };
+}
+
+async function applyReviewDecisionToSavedReport(input, relatedInputs, now) {
+  const report = await getSavedReport().catch(() => null);
+  if (!report?.items?.length) return [];
+  const status = await getRefreshStatus().catch(() => null);
+  if (status?.status === "running") return [];
+
+  const parsedCache = new Map();
+  const updates = [];
+  let changed = false;
+
+  for (const related of relatedInputs) {
+    const item = (report.items || []).find((product) => normalizeReviewUrl(product.url) === normalizeReviewUrl(related.ownUrl));
+    if (!item) continue;
+    const candidate = await candidateProductFromReviewInput(input, related, item, parsedCache).catch(() => null);
+    const applied = applyReviewDecisionToSavedReportItem(item, input, related, candidate, now);
+    if (!applied) continue;
+    changed = true;
+    updates.push({
+      ownUrl: related.ownUrl,
+      competitorId: input.competitorId,
+      candidate: candidate ? reviewCandidateSnapshot(candidate, item.platform) : null
+    });
+  }
+
+  if (!changed) return updates;
+  await saveReportWithStatus(report, {
+    ...(status || {}),
+    status: "ready",
+    updatedAt: new Date().toISOString(),
+    items: report.items.length,
+    totalItems: report.totalItems,
+    message: status?.message || "Relatorio atualizado por revisao manual"
+  });
+  return updates;
+}
+
+async function candidateProductFromReviewInput(input, related, item, parsedCache) {
+  const competitorUrl = related.competitorUrl || input.competitorUrl || "";
+  if (!competitorUrl || input.action === "missing-today" || input.action === "wrong") return null;
+  if (input.candidate && sameNormalizedUrl(input.candidate.url, competitorUrl)) {
+    return {
+      title: input.candidate.title || titleFromUrl(competitorUrl),
+      url: competitorUrl,
+      image: input.candidate.image || "",
+      platform: input.candidate.platform || inferPlatform(`${input.candidate.title || ""} ${competitorUrl}`),
+      licenses: input.candidate.licenses || { primary: { price: null }, secondary: { price: null } },
+      platformLicenses: input.candidate.platformLicenses || {}
+    };
+  }
+  const parsed = await getParsedCompetitorProduct(competitorUrl, parsedCache);
+  return {
+    ...parsed,
+    licenses: licensesForPlatform(parsed, item.platform)
+  };
+}
+
+function applyReviewDecisionToSavedReportItem(item, input, related, candidate, now) {
+  const competitorId = input.competitorId;
+  const competitorUrl = related.competitorUrl || input.competitorUrl || "";
+  let changed = false;
+  for (const [licenseKey, license] of Object.entries(item.licenses || {})) {
+    license.competitors = license.competitors || {};
+    const current = license.competitors[competitorId] || {};
+    if (input.action === "wrong" && competitorUrl && current.url && !sameNormalizedUrl(current.url, competitorUrl)) continue;
+
+    const next = { ...current };
+    if (input.action === "missing-today") {
+      next.price = null;
+      next.available = false;
+      next.review = reviewStatusPayload("missing-today", now);
+    } else if (input.action === "wrong") {
+      next.available = false;
+      next.review = reviewStatusPayload("wrong", now);
+    } else if ((input.action === "confirm" || input.action === "choose") && competitorUrl && candidate) {
+      const variant = candidate.licenses?.[licenseKey] || {};
+      const available = variant.available !== false;
+      next.price = available ? (variant.price ?? null) : null;
+      next.url = candidate.url || competitorUrl;
+      next.title = candidate.title || next.title || titleFromUrl(competitorUrl);
+      next.available = variant.available;
+      next.note = variant.price
+        ? (variant.available === false ? "Variacao indisponivel no concorrente" : undefined)
+        : candidate.note || "Licenca nao anunciada nessa pagina";
+      next.review = reviewStatusPayload("confirmed", now);
+    } else {
+      continue;
+    }
+
+    license.competitors[competitorId] = next;
+    changed = true;
+  }
+  return changed;
+}
+
+function reviewStatusPayload(status, now) {
+  if (status === "missing-today") {
+    return {
+      status,
+      confidence: 70,
+      label: "Marcado sem produto hoje",
+      reasons: ["Voce marcou que nao encontrou hoje"],
+      updatedAt: now
+    };
+  }
+  if (status === "wrong") {
+    return {
+      status,
+      confidence: 1,
+      label: "Marcado incorreto",
+      reasons: ["Voce marcou este par como errado"],
+      updatedAt: now
+    };
+  }
+  return {
+    status: "confirmed",
+    confidence: 100,
+    label: "Confirmado por voce",
+    reasons: ["Vinculo salvo manualmente"],
+    updatedAt: now
+  };
+}
+
+function reviewCandidateSnapshot(candidate, platform) {
+  return {
+    url: candidate.url,
+    title: candidate.title,
+    image: candidate.image || "",
+    platform: candidate.platform || "",
+    licenses: licensesForPlatform(candidate, platform)
+  };
 }
 
 function buildReviewDecision(current, input, related, now) {
@@ -1449,7 +1588,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  const minimumTokenScore = options.preview ? 3 : (ownTitleTokens.length <= 2 ? 2 : 6);
+  const minimumTokenScore = options.preview ? (ownTitleTokens.length <= 2 ? 2 : 3) : (ownTitleTokens.length <= 2 ? 2 : 6);
   if (!meaningfulMatches || tokenScore < minimumTokenScore) return 0;
 
   let score = tokenScore;
@@ -1829,6 +1968,7 @@ function json(payload, statusCode = 200) {
 
 const STOP_WORDS = new Set([
   "midia",
+  "dia",
   "digital",
   "ps4",
   "ps5",
@@ -1861,6 +2001,7 @@ const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
   "ps3",
   "playstation",
   "midia",
+  "dia",
   "digital",
   "primaria",
   "primario",
@@ -1881,6 +2022,7 @@ const LOOSE_TITLE_TOKENS = new Set([
   "edicao",
   "standard",
   "midia",
+  "dia",
   "digital"
 ]);
 
