@@ -175,7 +175,7 @@ function getEntries() {
     Object.entries(item.licenses || {}).map(([license, payload]) => {
       const competitorPrices = Object.entries(payload.competitors || {})
         .map(([id, value]) => ({ id, ...value }))
-        .filter((value) => isCompetitorPriceCountable(item.url, value.id, value));
+        .filter((value) => isCompetitorPriceCountable(item, value.id, value));
       const best = competitorPrices.slice().sort((a, b) => a.price - b.price)[0] || null;
       const diff = best && typeof payload.myPrice === "number" ? payload.myPrice - best.price : null;
       return {
@@ -198,9 +198,10 @@ function invalidateEntries() {
   state.entryCache = null;
 }
 
-function isCompetitorPriceCountable(ownUrl, competitorId, value) {
+function isCompetitorPriceCountable(item, competitorId, value) {
   if (!value || typeof value.price !== "number") return false;
   if (value.available === false) return false;
+  const ownUrl = item?.url || "";
   const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
   if (local && shouldApplyStoredDecision(state.report, local)) {
     if (local.action === "missing-today") return false;
@@ -208,7 +209,43 @@ function isCompetitorPriceCountable(ownUrl, competitorId, value) {
   }
   if (value.review?.status === "missing-today" || value.review?.status === "wrong") return false;
   if ((value.review?.reasons || []).some((reason) => /marcou este par como errado/i.test(reason))) return false;
+  if (!isManuallyConfirmed(ownUrl, competitorId, value) && competitorAutoIgnoreReason(item, value)) return false;
   return true;
+}
+
+function competitorAutoIgnoreReason(item, value) {
+  if (!value) return "";
+  if (value.available === false) return "Indisponivel - ignorado no calculo";
+  if (hasPlatformMismatch(item, value)) return "Plataforma diferente - ignorado no calculo";
+  if (hasF1ManagerMismatch(item, value)) return "F1 Manager e outro jogo - ignorado no calculo";
+  return "";
+}
+
+function isManuallyConfirmed(ownUrl, competitorId, value) {
+  const local = state.reviewDecisions?.[reviewDecisionKey(ownUrl, competitorId)];
+  if (local && shouldApplyStoredDecision(state.report, local) && sameReviewUrl(local.competitorUrl, value?.url)) {
+    return local.action === "confirm" || local.action === "choose";
+  }
+  return value?.review?.status === "confirmed";
+}
+
+function hasPlatformMismatch(item, value) {
+  const ownPlatform = normalizeComparisonText(item?.platform || item?.title || "");
+  const candidateText = normalizeComparisonText(`${value?.title || ""} ${value?.url || ""}`);
+  const ownIsPs4 = /\bps4\b|playstation 4/.test(ownPlatform);
+  const ownIsPs5 = /\bps5\b|playstation 5/.test(ownPlatform);
+  const candidateHasPs4 = /\bps4\b|playstation 4/.test(candidateText);
+  const candidateHasPs5 = /\bps5\b|playstation 5/.test(candidateText);
+  if (ownIsPs4 && candidateHasPs5 && !candidateHasPs4) return true;
+  if (ownIsPs5 && candidateHasPs4 && !candidateHasPs5) return true;
+  return false;
+}
+
+function hasF1ManagerMismatch(item, value) {
+  const ownText = normalizeComparisonText(`${item?.title || ""} ${item?.platform || ""}`);
+  const candidateText = normalizeComparisonText(`${value?.title || ""} ${value?.url || ""}`);
+  if (!/\bf1\b/.test(ownText) || !/\bf1\b/.test(candidateText)) return false;
+  return /\bmanager\b/.test(ownText) !== /\bmanager\b/.test(candidateText);
 }
 
 function classify(diff, best) {
@@ -362,10 +399,11 @@ function scheduleSearchRender() {
 function renderCompetitors(entry) {
   return competitors.map((competitor) => {
     const value = entry.competitorData[competitor.id];
-    const ignored = value && !isCompetitorPriceCountable(entry.item.url, competitor.id, value);
+    const ignored = value && !isCompetitorPriceCountable(entry.item, competitor.id, value);
     const bestClass = !ignored && entry.best?.id === competitor.id ? " best" : "";
     const missingClass = value?.price && !ignored ? "" : " missing";
-    const note = value?.available === false ? "Indisponivel - ignorado no calculo" : ignored ? "Ignorado no calculo" : (entry.best?.id === competitor.id ? "Menor preco" : "");
+    const autoNote = competitorAutoIgnoreReason(entry.item, value);
+    const note = autoNote || (ignored ? "Ignorado no calculo" : (entry.best?.id === competitor.id ? "Menor preco" : ""));
     const review = value?.review;
     const reviewClass = review?.status ? ` review-${review.status}` : "";
     const reviewText = review ? `${review.label} (${review.confidence}%)` : "IA: sem leitura";
@@ -962,6 +1000,12 @@ function normalizeSearchText(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function normalizeComparisonText(value) {
+  return normalizeSearchText(value)
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
