@@ -462,8 +462,11 @@ async function saveReviewDecision(payload, button, options = {}) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error || "Nao consegui salvar");
+    const serverApplied = applyServerReviewDecisions(result.overrides?.appliedDecisions || []);
     if (!optimistic) {
       applyLocalReviewDecision(payload);
+      render();
+    } else if (serverApplied) {
       render();
     }
     if (button) button.textContent = "Salvo";
@@ -487,6 +490,34 @@ function applyLocalReviewDecision(payload) {
   applyReviewDecisionToReport(state.report, payload);
   invalidateEntries();
   storeReport(state.report);
+}
+
+function applyServerReviewDecisions(decisions) {
+  if (!Array.isArray(decisions) || !decisions.length) return false;
+  let changed = false;
+  for (const decision of decisions) {
+    if (!decision?.ownUrl || !decision?.competitorId) continue;
+    const payload = {
+      action: decision.action,
+      ownUrl: decision.ownUrl,
+      competitorId: decision.competitorId,
+      competitorUrl: decision.competitorUrl || ""
+    };
+    const key = reviewDecisionKey(payload.ownUrl, payload.competitorId);
+    state.reviewDecisions[key] = {
+      ...payload,
+      candidate: null,
+      savedAt: decision.savedAt || new Date().toISOString()
+    };
+    const item = (state.report.items || []).find((product) => product.url === payload.ownUrl);
+    if (item) applyReviewDecisionToItem(item, payload);
+    changed = true;
+  }
+  if (!changed) return false;
+  invalidateEntries();
+  storeReviewDecisions();
+  storeReport(state.report);
+  return true;
 }
 
 function rememberReviewDecision(payload) {
