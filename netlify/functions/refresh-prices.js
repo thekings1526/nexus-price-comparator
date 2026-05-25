@@ -329,7 +329,7 @@ async function applyReviewDecisionToSavedReport(input, relatedInputs, now) {
     updatedAt: new Date().toISOString(),
     items: report.items.length,
     totalItems: report.totalItems,
-    message: status?.message || "Relatorio atualizado por revisao manual"
+    message: status?.message || "Relatório atualizado por revisão manual"
   });
   return updates;
 }
@@ -380,7 +380,7 @@ function applyReviewDecisionToSavedReportItem(item, input, related, candidate, n
       next.available = variant.available;
       next.note = variant.price
         ? (variant.available === false ? "Variacao indisponivel no concorrente" : undefined)
-        : candidate.note || "Licenca nao anunciada nessa pagina";
+        : candidate.note || "Licença não anunciada nessa página";
       next.review = reviewStatusPayload("confirmed", now);
     } else {
       continue;
@@ -398,7 +398,7 @@ function reviewStatusPayload(status, now) {
       status,
       confidence: 70,
       label: "Marcado sem produto hoje",
-      reasons: ["Voce marcou que nao encontrou hoje"],
+      reasons: ["Você marcou que não encontrou hoje"],
       updatedAt: now
     };
   }
@@ -407,14 +407,14 @@ function reviewStatusPayload(status, now) {
       status,
       confidence: 1,
       label: "Marcado incorreto",
-      reasons: ["Voce marcou este par como errado"],
+      reasons: ["Você marcou este par como errado"],
       updatedAt: now
     };
   }
   return {
     status: "confirmed",
     confidence: 100,
-    label: "Confirmado por voce",
+    label: "Confirmado por você",
     reasons: ["Vinculo salvo manualmente"],
     updatedAt: now
   };
@@ -948,7 +948,7 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
     return {
       status: "confirmed",
       confidence: 100,
-      label: "Confirmado por voce",
+      label: "Confirmado por você",
       source: result?.source || "manual-confirmed",
       reasons: ["Vinculo salvo manualmente"]
     };
@@ -960,7 +960,7 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
       confidence: decision?.noTodayAt ? 70 : 35,
       label: decision?.noTodayAt ? "Marcado sem produto hoje" : "Precisa revisar",
       source: result?.source || "not-found",
-      reasons: [decision?.noTodayAt ? "Voce marcou que nao encontrou hoje" : "Nenhum candidato passou com seguranca"]
+      reasons: [decision?.noTodayAt ? "Você marcou que não encontrou hoje" : "Nenhum candidato passou com segurança"]
     };
   }
 
@@ -971,9 +971,9 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
   const candidatePlatforms = platformsIn(candidateText);
   if (ownPlatform && candidatePlatforms.has(ownPlatform)) reasons.push("Plataforma bate");
   if (titleCoverageAccepted(gameTokens(ownProduct.title), new Set(gameTokens(match.title)))) reasons.push("Nome bate bem");
-  if (hasAnyLicensePrice(match)) reasons.push("Preco de licenca lido");
+  if (hasAnyLicensePrice(match)) reasons.push("Preço de licença lido");
   if (imageLooksRelated(ownProduct.image, match.image)) reasons.push("Imagem parece relacionada");
-  if (decision?.rejectedUrls?.[normalizeReviewUrl(match.url)]) reasons.push("Voce ja marcou este par como errado");
+  if (decision?.rejectedUrls?.[normalizeReviewUrl(match.url)]) reasons.push("Você já marcou este par como errado");
   const learningAdjustment = learnedCandidateAdjustment(ownProduct, match, competitorId, overrides);
   if (learningAdjustment >= 4) reasons.push("Padrao aprendido com suas correcoes");
   if (learningAdjustment <= -8) reasons.push("Penalizado por correcoes anteriores");
@@ -985,7 +985,7 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
     confidence,
     label: status === "auto-high" ? "IA: alta confianca" : status === "auto-medium" ? "IA: conferir" : "IA: revisar",
     source: result?.source || "auto",
-    reasons: reasons.length ? reasons.slice(0, 4) : ["Comparacao por nome e link"]
+    reasons: reasons.length ? reasons.slice(0, 4) : ["Comparação por nome e link"]
   };
 }
 
