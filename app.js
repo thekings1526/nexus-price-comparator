@@ -7,6 +7,8 @@ const competitors = [
 
 const APP_SCHEMA_VERSION = 4;
 const REVIEW_CACHE_KEY = "nexus-review-decisions";
+const SEARCH_RENDER_DELAY_MS = 120;
+const ROW_RENDER_BATCH_SIZE = 70;
 
 const demoReport = {
   schemaVersion: APP_SCHEMA_VERSION,
@@ -25,6 +27,13 @@ const state = {
   sort: "status",
   threshold: 2,
   reviewDecisions: loadStoredReviewDecisions(),
+  entryCache: null,
+  searchTimer: null,
+  rowsRenderJob: {
+    id: 0,
+    handle: null,
+    idle: false
+  },
   refreshTimer: null,
   review: {
     modalContext: null,
@@ -92,8 +101,8 @@ function storeReviewDecisions() {
 
 function bindEvents() {
   elements.searchInput.addEventListener("input", (event) => {
-    state.search = event.target.value.trim().toLowerCase();
-    render();
+    state.search = normalizeSearchText(event.target.value);
+    scheduleSearchRender();
   });
 
   elements.statusSelect.addEventListener("change", (event) => {
@@ -113,6 +122,7 @@ function bindEvents() {
 
   elements.thresholdInput.addEventListener("input", (event) => {
     state.threshold = Number(event.target.value) || 0;
+    invalidateEntries();
     render();
   });
 
@@ -136,7 +146,14 @@ function render() {
 }
 
 function getEntries() {
-  return (state.report.items || []).flatMap((item) => (
+  const cacheKey = [
+    state.report.generatedAt || "",
+    state.report.items?.length || 0,
+    state.threshold
+  ].join(":");
+  if (state.entryCache?.key === cacheKey) return state.entryCache.entries;
+
+  const entries = (state.report.items || []).flatMap((item) => (
     Object.entries(item.licenses || {}).map(([license, payload]) => {
       const competitorPrices = Object.entries(payload.competitors || {})
         .map(([id, value]) => ({ id, ...value }))
@@ -150,10 +167,17 @@ function getEntries() {
         competitorData: payload.competitors || {},
         best,
         diff,
-        status: classify(diff, best)
+        status: classify(diff, best),
+        searchText: normalizeSearchText(`${item.title || ""} ${item.platform || ""}`)
       };
     })
   ));
+  state.entryCache = { key: cacheKey, entries };
+  return entries;
+}
+
+function invalidateEntries() {
+  state.entryCache = null;
 }
 
 function isCompetitorPriceCountable(ownUrl, competitorId, value) {
@@ -178,7 +202,7 @@ function matchesFilters(entry) {
   if (state.status !== "all" && entry.status !== state.status) return false;
   if (state.license !== "all" && entry.license !== state.license) return false;
   if (!state.search) return true;
-  return `${entry.item.title} ${entry.item.platform}`.toLowerCase().includes(state.search);
+  return entry.searchText.includes(state.search);
 }
 
 function sortEntries(entries) {
@@ -197,12 +221,10 @@ function sortEntries(entries) {
 }
 
 function renderSummary(entries) {
-  const counts = {
-    expensive: entries.filter((entry) => entry.status === "expensive").length,
-    close: entries.filter((entry) => entry.status === "close").length,
-    cheaper: entries.filter((entry) => entry.status === "cheaper").length,
-    missing: entries.filter((entry) => entry.status === "missing").length
-  };
+  const counts = entries.reduce((acc, entry) => {
+    acc[entry.status] = (acc[entry.status] || 0) + 1;
+    return acc;
+  }, { expensive: 0, close: 0, cheaper: 0, missing: 0 });
   elements.summaryGrid.innerHTML = `
     <article class="metric metric-risk"><b>${counts.expensive}</b><span>Nexus mais caro</span></article>
     <article class="metric metric-aligned"><b>${counts.close}</b><span>Preco alinhado</span></article>
@@ -212,6 +234,7 @@ function renderSummary(entries) {
 }
 
 function renderRows(entries) {
+  cancelRowsRenderJob();
   elements.resultsCount.textContent = `${entries.length} ${entries.length === 1 ? "resultado" : "resultados"}`;
   elements.boardMeta.textContent = state.report.generatedAt
     ? `Atualizado em ${formatDate(state.report.generatedAt)}`
@@ -222,55 +245,99 @@ function renderRows(entries) {
     return;
   }
 
-  elements.rows.innerHTML = entries.map((entry) => {
-    const licenseLabel = entry.license === "primary" ? "Primaria" : "Secundaria";
-    const licenseClass = entry.license === "primary" ? "license-primary" : "license-secondary";
-    const statusLabel = {
-      expensive: "Acima do mercado",
-      close: "Preco alinhado",
-      cheaper: "Abaixo do mercado",
-      missing: "Sem referencia"
-    }[entry.status];
+  const jobId = ++state.rowsRenderJob.id;
+  const firstBatch = entries.slice(0, ROW_RENDER_BATCH_SIZE);
+  elements.rows.innerHTML = firstBatch.map(renderRow).join("");
+  scheduleRowsBatch(entries, ROW_RENDER_BATCH_SIZE, jobId);
+}
 
-    return `
-      <article class="price-row comparison-card status-row-${entry.status}">
-        <div class="card-main">
-          <div class="game-cell">
-            ${entry.item.image ? `<img src="${entry.item.image}" alt="" loading="lazy" onerror="this.remove()">` : `<img alt="">`}
-            <div>
-              <a class="game-title" href="${entry.item.url || "#"}" target="_blank" rel="noreferrer">${escapeHtml(entry.item.title)}</a>
-              <div class="game-meta">
-                <span>${entry.item.platform || "Plataforma"}</span>
-                <span class="tag ${licenseClass}">${licenseLabel}</span>
-                <span class="status-tag status-${entry.status}">${statusLabel}</span>
-              </div>
+function renderRow(entry) {
+  const licenseLabel = entry.license === "primary" ? "Primaria" : "Secundaria";
+  const licenseClass = entry.license === "primary" ? "license-primary" : "license-secondary";
+  const statusLabel = {
+    expensive: "Acima do mercado",
+    close: "Preco alinhado",
+    cheaper: "Abaixo do mercado",
+    missing: "Sem referencia"
+  }[entry.status];
+
+  return `
+    <article class="price-row comparison-card status-row-${entry.status}">
+      <div class="card-main">
+        <div class="game-cell">
+          ${entry.item.image ? `<img src="${entry.item.image}" alt="" loading="lazy" onerror="this.remove()">` : `<img alt="">`}
+          <div>
+            <a class="game-title" href="${entry.item.url || "#"}" target="_blank" rel="noreferrer">${escapeHtml(entry.item.title)}</a>
+            <div class="game-meta">
+              <span>${entry.item.platform || "Plataforma"}</span>
+              <span class="tag ${licenseClass}">${licenseLabel}</span>
+              <span class="status-tag status-${entry.status}">${statusLabel}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="price-strip">
-          <div class="price-box">
-            <span>Preco Nexus</span>
-            <strong>${formatPrice(entry.myPrice)}</strong>
-          </div>
-          <div class="price-box">
-            <span>Melhor concorrente</span>
-            <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
-            ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
-          </div>
-          <div class="price-box price-box-diff">
-            <span>Variacao</span>
-            <strong class="diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</strong>
-          </div>
+      <div class="price-strip">
+        <div class="price-box">
+          <span>Preco Nexus</span>
+          <strong>${formatPrice(entry.myPrice)}</strong>
         </div>
+        <div class="price-box">
+          <span>Melhor concorrente</span>
+          <strong>${entry.best ? formatPrice(entry.best.price) : "Sem preco"}</strong>
+          ${entry.best ? `<small>${findCompetitor(entry.best.id)?.name || entry.best.id}</small>` : ""}
+        </div>
+        <div class="price-box price-box-diff">
+          <span>Variacao</span>
+          <strong class="diff ${diffClass(entry.diff)}">${formatDiff(entry.diff)}</strong>
+        </div>
+      </div>
 
-        <div class="competitor-area">
-          <span class="competitor-area-title">Concorrentes</span>
-          <div class="competitors">${renderCompetitors(entry)}</div>
-        </div>
-      </article>
-    `;
-  }).join("");
+      <div class="competitor-area">
+        <span class="competitor-area-title">Concorrentes</span>
+        <div class="competitors">${renderCompetitors(entry)}</div>
+      </div>
+    </article>
+  `;
+}
+
+function scheduleRowsBatch(entries, start, jobId) {
+  if (start >= entries.length || jobId !== state.rowsRenderJob.id) {
+    if (jobId === state.rowsRenderJob.id) state.rowsRenderJob.handle = null;
+    return;
+  }
+  const run = () => {
+    if (jobId !== state.rowsRenderJob.id) return;
+    state.rowsRenderJob.handle = null;
+    const nextStart = start + ROW_RENDER_BATCH_SIZE;
+    elements.rows.insertAdjacentHTML("beforeend", entries.slice(start, nextStart).map(renderRow).join(""));
+    scheduleRowsBatch(entries, nextStart, jobId);
+  };
+  if ("requestIdleCallback" in window) {
+    state.rowsRenderJob.idle = true;
+    state.rowsRenderJob.handle = window.requestIdleCallback(run, { timeout: 120 });
+    return;
+  }
+  state.rowsRenderJob.idle = false;
+  state.rowsRenderJob.handle = window.setTimeout(run, 16);
+}
+
+function cancelRowsRenderJob() {
+  if (!state.rowsRenderJob.handle) return;
+  if (state.rowsRenderJob.idle && "cancelIdleCallback" in window) {
+    window.cancelIdleCallback(state.rowsRenderJob.handle);
+  } else {
+    window.clearTimeout(state.rowsRenderJob.handle);
+  }
+  state.rowsRenderJob.handle = null;
+}
+
+function scheduleSearchRender() {
+  window.clearTimeout(state.searchTimer);
+  state.searchTimer = window.setTimeout(() => {
+    state.searchTimer = null;
+    render();
+  }, SEARCH_RENDER_DELAY_MS);
 }
 
 function renderCompetitors(entry) {
@@ -400,6 +467,7 @@ async function saveReviewDecision(payload, button, options = {}) {
 function applyLocalReviewDecision(payload) {
   rememberReviewDecision(payload);
   applyReviewDecisionToReport(state.report, payload);
+  invalidateEntries();
   storeReport(state.report);
 }
 
@@ -664,6 +732,7 @@ async function loadSavedReport() {
     const payload = await response.json();
     if (payload.report?.items) {
       state.report = applyStoredReviewDecisions(payload.report);
+      invalidateEntries();
       storeReport(state.report);
     }
     state.remoteStatus = payload.status || null;
@@ -756,6 +825,14 @@ function diffClass(value) {
 function formatDate(value) {
   const date = value ? new Date(value) : new Date();
   return date.toLocaleString("pt-BR");
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function isStaleStatus(status) {
