@@ -79,6 +79,7 @@ Motivo: o catalogo da Nexus tem mais de 1000 produtos, entao a coleta nao deve d
 - Ao marcar primario como correto, secundario do mesmo produto/concorrente tambem deve ser considerado resolvido, e vice-versa.
 - Acoes de revisao manual em um jogo PS4/PS5 devem refletir tambem na variacao irma PS4/PS5 do mesmo jogo. Em `Trocar produto` / `Usar este`, se o usuario encontrou o produto de uma plataforma no concorrente, a API deve tentar localizar a outra plataforma no mesmo concorrente trocando PS4/PS5 no nome e validando pelo motor de comparacao; se nao encontrar, usa o link do concorrente ja existente na variacao irma quando houver.
 - A IA observadora tem uma camada de aprendizado em `match-overrides.learning`: confirmacoes e trocas viram exemplos positivos, marcacoes erradas viram exemplos negativos. A coleta usa esses exemplos para ajustar a pontuacao de produtos ainda nao confirmados manualmente. Produto ja confirmado como correto nao deve ser alterado pela IA.
+- Produtos de concorrentes marcados como indisponiveis (`available === false`) nao devem entrar no calculo de melhor preco/variacao, mesmo que a pagina esteja ativa e tenha preco antigo. A coleta deve salvar preco `null` quando detectar indisponibilidade por texto/HTML.
 - Tudo que for importante deve ser salvo em `RETOMADA.md` ou neste arquivo antes de encerrar a conversa.
 - Antes de confirmar qualquer alteracao como feita, deve validar no painel publicado.
 
