@@ -2,6 +2,20 @@
 
 Arquivo criado para permitir continuar o projeto em uma conversa nova sem depender do historico completo do chat.
 
+## Regra permanente de memoria do projeto
+
+Todo andamento relevante do projeto deve ser registrado para os proximos chats consultarem. Antes de encerrar qualquer trabalho, atualizar `RETOMADA.md`; se a mudanca afetar regras gerais, arquitetura, acessos, fluxo de publicacao ou instrucoes permanentes, atualizar tambem este `CONTEXTO_COMPLETO.md`.
+
+Registrar de forma objetiva:
+
+- o que foi feito/decidido;
+- arquivos alterados;
+- commits e deploys;
+- validacoes feitas no painel publicado;
+- pendencias, riscos e cuidados.
+
+Quando houver commit/deploy ou decisao importante, salvar tambem no GitHub. Nao registrar tokens reais em arquivos versionados.
+
 ## Como retomar em uma nova conversa
 
 Peça para o agente:
@@ -19,7 +33,7 @@ Leia RETOMADA.md e CONTEXTO_COMPLETO.md e continue o comparador Nexus de onde pa
 - Render cron ID: `crn-d87t66n7f7vs73dqjnpg`
 - Render cron: `nexus-price-worker`
 
-Nao registrar tokens reais neste arquivo. Os tokens foram usados na sessao, mas nao devem ser repetidos em respostas ou arquivos.
+Os tokens reais ficam apenas no arquivo local `.env.local`, que e ignorado pelo Git. Nao registrar tokens reais neste arquivo nem em qualquer arquivo versionado.
 
 ## Objetivo do produto
 
@@ -63,7 +77,7 @@ Motivo: o catalogo da Nexus tem mais de 1000 produtos, entao a coleta nao deve d
 - Se marcar um concorrente como "nao tem hoje", isso nao deve bloquear para sempre, pois o nicho e volatil.
 - Se marcar um produto como incorreto, a rejeicao deve ser especifica para aquele link, nao para o concorrente inteiro.
 - Ao marcar primario como correto, secundario do mesmo produto/concorrente tambem deve ser considerado resolvido, e vice-versa.
-- Tudo que for importante deve ser salvo em `RETOMADA.md` ou neste arquivo.
+- Tudo que for importante deve ser salvo em `RETOMADA.md` ou neste arquivo antes de encerrar a conversa.
 - Antes de confirmar qualquer alteracao como feita, deve validar no painel publicado.
 
 ## Estado atual do painel
