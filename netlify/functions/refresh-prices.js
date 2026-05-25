@@ -217,7 +217,16 @@ function defaultReviewOverrides() {
   return {
     schemaVersion: 1,
     updatedAt: new Date().toISOString(),
-    decisions: {}
+    decisions: {},
+    learning: defaultReviewLearning()
+  };
+}
+
+function defaultReviewLearning() {
+  return {
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    examples: []
   };
 }
 
@@ -274,7 +283,8 @@ async function recordReviewDecision(input) {
     });
   }
 
-  const saved = await saveReviewOverrides({ ...overrides, decisions });
+  const learning = await buildReviewLearning(overrides, input, relatedInputs, now).catch(() => overrides.learning || defaultReviewLearning());
+  const saved = await saveReviewOverrides({ ...overrides, decisions, learning });
   return { ...saved, appliedDecisions };
 }
 
@@ -394,6 +404,88 @@ function relatedPlatformQuery(value, targetPlatform) {
   return cleanSearchQuery(cleanText(value || "")
     .replace(/\bps[45]\b/gi, label || "$&")
     .replace(/playstation\s*[45]/gi, number ? `PlayStation ${number}` : "$&"));
+}
+
+async function buildReviewLearning(overrides, input, relatedInputs, now) {
+  const learning = normalizeReviewLearning(overrides.learning);
+  if (!["confirm", "choose", "wrong"].includes(input.action)) return learning;
+
+  const report = await getSavedReport().catch(() => null);
+  const examples = [];
+  const parsedCache = new Map();
+  for (const related of relatedInputs) {
+    if (!related.competitorUrl) continue;
+    const ownItem = (report?.items || []).find((item) => normalizeReviewUrl(item.url) === normalizeReviewUrl(related.ownUrl));
+    const ownProduct = ownItem ? normalizeManualItem(ownItem) : await getOwnProductForReview(related.ownUrl).catch(() => null);
+    if (!ownProduct?.title) continue;
+    const candidateProduct = await getParsedCompetitorProduct(related.competitorUrl, parsedCache).catch(() => null);
+    if (!candidateProduct?.title) continue;
+    examples.push(buildReviewLearningExample({
+      action: input.action === "wrong" ? "negative" : "positive",
+      ownProduct,
+      candidateProduct,
+      competitorId: input.competitorId,
+      createdAt: now
+    }));
+  }
+  if (!examples.length) return learning;
+  const merged = mergeReviewLearningExamples(learning.examples, examples);
+  return {
+    ...learning,
+    updatedAt: now,
+    examples: merged
+  };
+}
+
+function normalizeReviewLearning(learning) {
+  return {
+    ...defaultReviewLearning(),
+    ...(learning || {}),
+    examples: Array.isArray(learning?.examples) ? learning.examples.slice(-1000) : []
+  };
+}
+
+function buildReviewLearningExample({ action, ownProduct, candidateProduct, competitorId, createdAt }) {
+  const ownTokens = coreTitleTokens(gameTokens(ownProduct.title || ""));
+  const candidateTokens = coreTitleTokens(gameTokens(candidateProduct.title || candidateProduct.url || ""));
+  const ownTokenSet = comparableTokenSet(ownTokens);
+  const candidateTokenSet = comparableTokenSet(candidateTokens);
+  const sharedTokens = ownTokens.filter((token) => candidateTokenSet.has(token));
+  const ownMissingTokens = ownTokens.filter((token) => !candidateTokenSet.has(token));
+  const candidateExtraTokens = candidateTokens.filter((token) => !ownTokenSet.has(token));
+  return {
+    id: [
+      action,
+      competitorId,
+      reviewFamilyKey(ownProduct),
+      normalizeReviewUrl(candidateProduct.url)
+    ].join(":"),
+    action,
+    competitorId,
+    ownUrl: ownProduct.url,
+    ownTitle: ownProduct.title,
+    ownPlatform: ownProduct.platform || "",
+    ownFamilyKey: reviewFamilyKey(ownProduct),
+    ownTokens,
+    candidateUrl: candidateProduct.url,
+    candidateTitle: candidateProduct.title,
+    candidatePlatform: candidateProduct.platform || "",
+    candidateFamilyKey: reviewFamilyKey(candidateProduct),
+    candidateTokens,
+    sharedTokens,
+    ownMissingTokens,
+    candidateExtraTokens,
+    createdAt
+  };
+}
+
+function mergeReviewLearningExamples(current, next) {
+  const byId = new Map();
+  for (const example of [...(current || []), ...next]) {
+    if (!example?.id) continue;
+    byId.set(example.id, example);
+  }
+  return Array.from(byId.values()).slice(-1000);
 }
 
 function getReviewDecision(overrides, ownUrl, competitorId) {
@@ -539,7 +631,7 @@ function isSameCatalogPage(candidateUrl, currentUrl) {
   return candidate.hostname === current.hostname && candidate.pathname === current.pathname;
 }
 
-async function findCompetitorProduct(competitor, ownProduct) {
+async function findCompetitorProduct(competitor, ownProduct, reviewOverrides = defaultReviewOverrides()) {
   const linksByUrl = new Map();
   for (const query of buildSearchQueries(ownProduct)) {
     const searchUrl = new URL("buscar", competitor.baseUrl);
@@ -556,7 +648,7 @@ async function findCompetitorProduct(competitor, ownProduct) {
 
   const links = Array.from(linksByUrl.values());
   const ranked = links
-    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct, { preview: true }) }))
+    .map((link) => ({ ...link, score: scoreCandidateWithLearning(link, ownProduct, competitor.id, reviewOverrides, { preview: true }) }))
     .filter((link) => link.score >= 7)
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);
@@ -566,7 +658,7 @@ async function findCompetitorProduct(competitor, ownProduct) {
     try {
       const productPage = await fetchProduct(candidate.url);
       const product = parseProductPage(productPage.html, productPage.url);
-      const score = scoreCandidate(product, ownProduct);
+      const score = scoreCandidateWithLearning(product, ownProduct, competitor.id, reviewOverrides);
       if (score >= 16) {
         validated.push({ product, score });
       }
@@ -589,16 +681,16 @@ async function findCompetitorProductForReport(competitor, ownProduct, catalog, p
   }
 
   if (Array.isArray(catalog) && catalog.length) {
-    const indexedMatch = await findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache, decision);
+    const indexedMatch = await findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache, decision, reviewOverrides);
     if (indexedMatch?.match) return indexedMatch;
   }
-  const fallback = await findCompetitorProduct(competitor, ownProduct);
+  const fallback = await findCompetitorProduct(competitor, ownProduct, reviewOverrides);
   return { match: fallback, source: fallback ? "search-fallback" : "not-found", decision };
 }
 
-async function findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache = new Map(), decision = null) {
+async function findCompetitorProductFromCatalog(competitor, ownProduct, catalog, parsedCache = new Map(), decision = null, reviewOverrides = defaultReviewOverrides()) {
   const ranked = catalog
-    .map((link) => ({ ...link, score: scoreCandidate(link, ownProduct, { preview: true }) - reviewPenalty(decision, link.url) }))
+    .map((link) => ({ ...link, score: scoreCandidateWithLearning(link, ownProduct, competitor.id, reviewOverrides, { preview: true }) - reviewPenalty(decision, link.url) }))
     .filter((link) => link.score >= 7)
     .sort((a, b) => b.score - a.score)
     .slice(0, Number(process.env.CATALOG_CANDIDATE_LIMIT || 8));
@@ -607,7 +699,7 @@ async function findCompetitorProductFromCatalog(competitor, ownProduct, catalog,
   for (const candidate of ranked) {
     try {
       const product = await getParsedCompetitorProduct(candidate.url, parsedCache);
-      const score = scoreCandidate(product, ownProduct) - reviewPenalty(decision, product.url);
+      const score = scoreCandidateWithLearning(product, ownProduct, competitor.id, reviewOverrides) - reviewPenalty(decision, product.url);
       if (score >= 16) validated.push({ product, score });
     } catch {
       // Keep trying the next catalog candidate.
@@ -648,7 +740,7 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
     };
   }
 
-  const score = scoreCandidate(match, ownProduct);
+  const score = scoreCandidateWithLearning(match, ownProduct, competitorId, overrides);
   const reasons = [];
   const ownPlatform = normalize(ownProduct.platform || "");
   const candidateText = normalize(`${match.title || ""} ${match.description || ""} ${match.url || ""}`);
@@ -658,6 +750,9 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
   if (hasAnyLicensePrice(match)) reasons.push("Preco de licenca lido");
   if (imageLooksRelated(ownProduct.image, match.image)) reasons.push("Imagem parece relacionada");
   if (decision?.rejectedUrls?.[normalizeReviewUrl(match.url)]) reasons.push("Voce ja marcou este par como errado");
+  const learningAdjustment = learnedCandidateAdjustment(ownProduct, match, competitorId, overrides);
+  if (learningAdjustment >= 4) reasons.push("Padrao aprendido com suas correcoes");
+  if (learningAdjustment <= -8) reasons.push("Penalizado por correcoes anteriores");
 
   const confidence = clamp(Math.round(score * 3.2 + (hasAnyLicensePrice(match) ? 8 : 0)), 1, 96);
   const status = confidence >= 82 ? "auto-high" : confidence >= 58 ? "auto-medium" : "needs-review";
@@ -741,7 +836,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
   const ranked = uniqueBy([...searchLinks.values(), ...catalogPool], (item) => item.url)
     .filter((link) => !decision?.rejectedUrls?.[normalizeReviewUrl(link.url)])
     .map((link) => {
-      const matchScore = scoreCandidate(link, ownProduct, { preview: true }) - reviewPenalty(decision, link.url);
+      const matchScore = scoreCandidateWithLearning(link, ownProduct, competitor.id, overrides, { preview: true }) - reviewPenalty(decision, link.url);
       const platformBoost = manualQuery && ownPlatform && platformsIn(normalize(`${link.text || ""} ${link.title || ""} ${link.url || ""}`)).has(ownPlatform) ? 3 : 0;
       const searchScore = manualQuery ? queryCandidateScore(link, manualQuery) + platformBoost : 0;
       return { ...link, score: matchScore, searchScore };
@@ -753,7 +848,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
   const candidates = (await mapLimit(ranked, 4, async (link) => {
     try {
       const product = await getParsedProductForReview(link.url);
-      const score = scoreCandidate(product, ownProduct) - reviewPenalty(decision, product.url);
+      const score = scoreCandidateWithLearning(product, ownProduct, competitor.id, overrides) - reviewPenalty(decision, product.url);
       if (!manualQuery && score < 4) return null;
       return {
         url: product.url,
@@ -842,6 +937,48 @@ function queryCandidateScore(link, query) {
   if (!queryTokens.length) return 0;
   const haystack = comparableTokenSet(gameTokens(`${link.text || ""} ${link.title || ""} ${link.url || ""}`));
   return queryTokens.reduce((score, token) => score + (haystack.has(token) ? (token.length >= 4 ? 2 : 1) : 0), 0);
+}
+
+function scoreCandidateWithLearning(candidate, ownProduct, competitorId, reviewOverrides, options = {}) {
+  const baseScore = scoreCandidate(candidate, ownProduct, options);
+  if (!baseScore) return 0;
+  return baseScore + learnedCandidateAdjustment(ownProduct, candidate, competitorId, reviewOverrides);
+}
+
+function learnedCandidateAdjustment(ownProduct, candidate, competitorId, reviewOverrides) {
+  const examples = reviewOverrides?.learning?.examples;
+  if (!Array.isArray(examples) || !examples.length) return 0;
+
+  const ownTokens = coreTitleTokens(gameTokens(ownProduct.title || ""));
+  const candidateTokens = coreTitleTokens(gameTokens(`${candidate.text || ""} ${candidate.title || ""} ${candidate.url || ""}`));
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  const ownFamily = reviewFamilyKey(ownProduct);
+  let adjustment = 0;
+
+  for (const example of examples.slice(-500)) {
+    if (example.competitorId !== competitorId) continue;
+    const ownSimilarity = learnedTokenSimilarity(ownSet, new Set(example.ownTokens || []));
+    if (ownSimilarity < 0.65 && example.ownFamilyKey !== ownFamily) continue;
+    const candidateSimilarity = learnedTokenSimilarity(candidateSet, new Set(example.candidateTokens || []));
+    const sameCandidateFamily = example.candidateFamilyKey && example.candidateFamilyKey === reviewFamilyKey(candidate);
+    const sameCandidateUrl = normalizeReviewUrl(example.candidateUrl) === normalizeReviewUrl(candidate.url);
+    const confidence = Math.max(candidateSimilarity, sameCandidateFamily ? 0.9 : 0, sameCandidateUrl ? 1 : 0);
+    if (confidence < 0.65) continue;
+    if (example.action === "positive") adjustment += sameCandidateUrl ? 14 : Math.round(8 * confidence);
+    if (example.action === "negative") adjustment -= sameCandidateUrl ? 30 : Math.round(16 * confidence);
+  }
+
+  return clamp(adjustment, -30, 14);
+}
+
+function learnedTokenSimilarity(leftSet, rightSet) {
+  if (!leftSet.size || !rightSet.size) return 0;
+  let shared = 0;
+  for (const token of leftSet) {
+    if (rightSet.has(token)) shared += 1;
+  }
+  return shared / Math.max(leftSet.size, rightSet.size);
 }
 
 async function discoverProductSitemapUrls(baseUrl) {
