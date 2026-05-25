@@ -232,7 +232,8 @@ function defaultReviewLearning() {
 
 async function getReviewOverrides() {
   const store = await getBlobStore();
-  return await store.get("match-overrides", { type: "json", consistency: "strong" }) || defaultReviewOverrides();
+  const overrides = await store.get("match-overrides", { type: "json", consistency: "strong" }) || defaultReviewOverrides();
+  return hydrateReviewLearning(overrides);
 }
 
 async function saveReviewOverrides(overrides) {
@@ -486,6 +487,81 @@ function mergeReviewLearningExamples(current, next) {
     byId.set(example.id, example);
   }
   return Array.from(byId.values()).slice(-1000);
+}
+
+async function hydrateReviewLearning(overrides) {
+  const normalized = {
+    ...defaultReviewOverrides(),
+    ...(overrides || {}),
+    learning: normalizeReviewLearning(overrides?.learning)
+  };
+  if (normalized.learning.examples.length) return normalized;
+
+  const report = await getSavedReport().catch(() => null);
+  const examples = buildReviewLearningExamplesFromDecisions(normalized.decisions, report);
+  if (!examples.length) return normalized;
+  return {
+    ...normalized,
+    learning: {
+      ...normalized.learning,
+      updatedAt: normalized.updatedAt || new Date().toISOString(),
+      examples
+    }
+  };
+}
+
+function buildReviewLearningExamplesFromDecisions(decisions, report) {
+  if (!decisions || !report?.items?.length) return [];
+  const examples = [];
+  for (const [ownUrl, byCompetitor] of Object.entries(decisions)) {
+    const ownProduct = (report.items || []).find((item) => normalizeReviewUrl(item.url) === normalizeReviewUrl(ownUrl));
+    if (!ownProduct?.title) continue;
+    for (const [competitorId, decision] of Object.entries(byCompetitor || {})) {
+      if (decision.confirmedUrl) {
+        const candidateProduct = productSnapshotFromReport(ownProduct, competitorId, decision.confirmedUrl);
+        examples.push(buildReviewLearningExample({
+          action: "positive",
+          ownProduct: normalizeManualItem(ownProduct),
+          candidateProduct,
+          competitorId,
+          createdAt: decision.confirmedAt || decision.updatedAt || new Date().toISOString()
+        }));
+      }
+      for (const [rejectedUrl, payload] of Object.entries(decision.rejectedUrls || {})) {
+        const candidateProduct = productSnapshotFromReport(ownProduct, competitorId, rejectedUrl);
+        examples.push(buildReviewLearningExample({
+          action: "negative",
+          ownProduct: normalizeManualItem(ownProduct),
+          candidateProduct,
+          competitorId,
+          createdAt: payload?.rejectedAt || decision.updatedAt || new Date().toISOString()
+        }));
+      }
+    }
+  }
+  return mergeReviewLearningExamples([], examples);
+}
+
+function productSnapshotFromReport(ownProduct, competitorId, competitorUrl) {
+  const snapshots = Object.values(ownProduct.licenses || {})
+    .map((license) => license?.competitors?.[competitorId])
+    .filter(Boolean);
+  const snapshot = snapshots.find((item) => sameNormalizedUrl(item.url, competitorUrl)) || snapshots[0] || {};
+  const title = snapshot.title || titleFromUrl(competitorUrl);
+  return {
+    title,
+    url: competitorUrl,
+    image: snapshot.image || "",
+    platform: snapshot.platform || inferPlatform(`${title} ${competitorUrl}`),
+    licenses: {
+      primary: { price: null },
+      secondary: { price: null }
+    }
+  };
+}
+
+function sameNormalizedUrl(left, right) {
+  return normalizeReviewUrl(left) === normalizeReviewUrl(right);
 }
 
 function getReviewDecision(overrides, ownUrl, competitorId) {
