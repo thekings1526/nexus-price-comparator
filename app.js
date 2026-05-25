@@ -28,6 +28,13 @@ const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
   "games"
 ]);
 
+const DLC_SUBTITLE_TOKEN_GROUPS = [
+  [["phantom"], ["liberty"]],
+  [["burning"], ["shores"]],
+  [["shadow", "shadows"], ["erdtree"]],
+  [["vessel"], ["hatred"]]
+];
+
 const demoReport = {
   schemaVersion: APP_SCHEMA_VERSION,
   generatedAt: new Date().toISOString(),
@@ -218,6 +225,7 @@ function competitorAutoIgnoreReason(item, value) {
   if (value.available === false) return "Indisponivel - ignorado no calculo";
   if (hasPlatformMismatch(item, value)) return "Plataforma diferente - ignorado no calculo";
   if (hasF1ManagerMismatch(item, value)) return "F1 Manager e outro jogo - ignorado no calculo";
+  if (hasDlcSubtitleMismatch(item, value)) return "DLC/expansao diferente - ignorado no calculo";
   return "";
 }
 
@@ -246,6 +254,16 @@ function hasF1ManagerMismatch(item, value) {
   const candidateText = normalizeComparisonText(`${value?.title || ""} ${value?.url || ""}`);
   if (!/\bf1\b/.test(ownText) || !/\bf1\b/.test(candidateText)) return false;
   return /\bmanager\b/.test(ownText) !== /\bmanager\b/.test(candidateText);
+}
+
+function hasDlcSubtitleMismatch(item, value) {
+  const ownTokens = new Set(normalizeComparisonText(item?.title || "").split(/\s+/).filter(Boolean));
+  const candidateTokens = new Set(normalizeComparisonText(`${value?.title || ""} ${value?.url || ""}`).split(/\s+/).filter(Boolean));
+  return DLC_SUBTITLE_TOKEN_GROUPS.some((group) => hasDlcSubtitleGroup(ownTokens, group) !== hasDlcSubtitleGroup(candidateTokens, group));
+}
+
+function hasDlcSubtitleGroup(tokens, group) {
+  return group.every((alternatives) => alternatives.some((token) => tokens.has(token)));
 }
 
 function classify(diff, best) {
