@@ -1174,7 +1174,7 @@ function renderRefreshControls(status) {
   const stopping = statusKey === "stopping";
   elements.stopWorkerButton.hidden = !(statusKey === "queued" || statusKey === "running");
   elements.restartWorkerButton.hidden = false;
-  elements.runWorkerButton.hidden = running && !stopping;
+  elements.runWorkerButton.hidden = running;
   elements.runWorkerButton.textContent = canResumeCollection() ? "Continuar coleta" : "Executar coleta";
   elements.restartWorkerButton.textContent = running ? "Reiniciar do zero" : "Reiniciar coleta";
 }
