@@ -1567,10 +1567,11 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   const candidateTitlePlatforms = platformsIn(candidateTitleSource);
   if (ownPlatform && candidateTitlePlatforms.size && !candidateTitlePlatforms.has(ownPlatform)) return 0;
   const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
+  const equivalentTitle = hasEquivalentTitle(ownTitleTokens, candidateTitleTokens);
   const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
   const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
-  if (Array.from(ownTitleNumbers).some((token) => !candidateTitleNumbers.has(token) && !candidateTokens.has(token))) return 0;
-  if (Array.from(candidateTitleNumbers).some((token) => !ownTitleNumbers.has(token))) return 0;
+  if (!equivalentTitle && Array.from(ownTitleNumbers).some((token) => !candidateTitleNumbers.has(token) && !candidateTokens.has(token))) return 0;
+  if (!equivalentTitle && Array.from(candidateTitleNumbers).some((token) => !ownTitleNumbers.has(token))) return 0;
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -1588,11 +1589,12 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  const minimumTokenScore = options.preview ? (ownTitleTokens.length <= 2 ? 2 : 3) : (ownTitleTokens.length <= 2 ? 2 : 6);
+  const minimumTokenScore = equivalentTitle ? 2 : options.preview ? (ownTitleTokens.length <= 2 ? 2 : 3) : (ownTitleTokens.length <= 2 ? 2 : 6);
   if (!meaningfulMatches || tokenScore < minimumTokenScore) return 0;
 
   let score = tokenScore;
   score += titleCoverageScore(ownTitleTokens, candidateTitleTokens);
+  if (equivalentTitle) score += 10;
   score += editionCompatibilityScore(ownTitleTokens, candidateTitleTokens);
   if (ownPlatform && candidatePlatforms.has(ownPlatform)) score += 5;
   if (imageLooksRelated(ownProduct.image, candidate.image)) score += 3;
@@ -1738,6 +1740,7 @@ function seasonNumberVariants(token) {
 }
 
 function editionCompatibilityScore(ownTokens, candidateTokens) {
+  if (hasEquivalentTitle(ownTokens, candidateTokens)) return 5;
   const ownEditions = ownTokens.filter((token) => EDITION_TOKENS.has(token));
   const candidateEditions = Array.from(candidateTokens).filter((token) => EDITION_TOKENS.has(token));
   let score = 0;
@@ -1750,6 +1753,7 @@ function editionCompatibilityScore(ownTokens, candidateTokens) {
 }
 
 function hasEditionMismatch(ownTokens, candidateTokens) {
+  if (hasEquivalentTitle(ownTokens, candidateTokens)) return false;
   const ownSet = new Set(ownTokens);
   const candidateSet = new Set(candidateTokens);
   const ownEditions = Array.from(ownSet).filter((token) => STRICT_VERSION_TOKENS.has(token));
@@ -1760,9 +1764,25 @@ function hasEditionMismatch(ownTokens, candidateTokens) {
 }
 
 function hasConflictingExtraEdition(ownTokens, candidateTokens) {
+  if (hasEquivalentTitle(ownTokens, candidateTokens)) return false;
   const ownSet = new Set(ownTokens);
   return Array.from(candidateTokens)
     .some((token) => STRONG_EXTRA_EDITION_TOKENS.has(token) && !ownSet.has(token));
+}
+
+function hasEquivalentTitle(ownTokens, candidateTokens) {
+  return isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens);
+}
+
+function isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("resident") || !ownSet.has("evil") || !ownSet.has("4")) return false;
+  if (!candidateSet.has("resident") || !candidateSet.has("evil") || !candidateSet.has("4")) return false;
+  if (ownSet.has("2005") || candidateSet.has("2005")) return false;
+  const blockedEditions = ["gold", "ultimate", "deluxe", "complete", "collection", "colecao", "trilogy", "bundle", "pack", "triple", "village", "revelations", "origins"];
+  if (blockedEditions.some((token) => ownSet.has(token) || candidateSet.has(token))) return false;
+  return ownSet.has("remake") || candidateSet.has("remake");
 }
 
 function imageLooksRelated(ownImage, candidateImage) {
