@@ -13,16 +13,23 @@
         <h1>Monitor de preços</h1>
       </div>
       <section class="sync-card" aria-label="Status da atualização">
-        <div>
-          <span class="label">Atualização</span>
-          <strong id="syncStatus">Carregando dados</strong>
+        <div class="sync-card-head">
+          <div>
+            <span class="label">Coleta e atualização</span>
+            <strong id="syncStatus">Carregando dados</strong>
+          </div>
+          <span class="sync-badge" id="syncBadge">Pronto</span>
         </div>
         <div class="progress-track" aria-hidden="true">
           <span id="syncProgress"></span>
         </div>
         <small id="syncDetails">A coleta roda automaticamente uma vez por dia.</small>
-        <button class="run-button" id="runWorkerButton" type="button">Executar coleta</button>
-        <small class="cost-warning">Cada execucao usa o Render e pode gerar cobranca.</small>
+        <div class="sync-actions">
+          <button class="run-button" id="runWorkerButton" type="button">Executar coleta</button>
+          <button class="control-button" id="stopWorkerButton" type="button" hidden>Parar</button>
+          <button class="control-button danger" id="restartWorkerButton" type="button">Reiniciar do zero</button>
+        </div>
+        <small class="cost-warning">Cada execução usa o Render e pode gerar cobrança.</small>
       </section>
     </header>
 
@@ -116,6 +123,23 @@
           <button class="icon-button" id="closeReviewModal" type="button" aria-label="Fechar">×</button>
         </header>
         <div class="review-modal-body" id="reviewModalBody"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="refreshModal" hidden>
+      <section class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="refreshModalTitle">
+        <header class="review-modal-head">
+          <div>
+            <span class="label">Coleta</span>
+            <h2 id="refreshModalTitle">Confirmar coleta</h2>
+          </div>
+          <button class="icon-button" id="closeRefreshModal" type="button" aria-label="Fechar">×</button>
+        </header>
+        <div class="confirm-modal-body" id="refreshModalBody"></div>
+        <footer class="confirm-modal-actions">
+          <button class="control-button" id="cancelRefreshModal" type="button">Cancelar</button>
+          <button class="run-button" id="confirmRefreshModal" type="button">Confirmar</button>
+        </footer>
       </section>
     </div>
 
