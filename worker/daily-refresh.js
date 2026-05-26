@@ -4,6 +4,7 @@ const {
   discoverOwnProducts,
   getSavedReport,
   getReviewOverrides,
+  getRefreshControl,
   saveCatalogItems,
   saveReportWithStatus,
   COMPETITORS
@@ -20,10 +21,13 @@ const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item)
 
 async function main() {
   const startedAt = new Date().toISOString();
+  const control = await getRefreshControl().catch(() => null);
+  const runMode = requestedRunMode(control);
   const previous = await baseReport();
   await saveReportWithStatus(previous, {
     status: "running",
     startedAt,
+    mode: runMode,
     offset: previous.items?.length || 0,
     totalItems: previous.totalItems || 0,
     message: "Lendo catalogo da Nexus"
@@ -31,23 +35,36 @@ async function main() {
 
   const catalogItems = await discoverOwnProducts(Number.POSITIVE_INFINITY);
   await saveCatalogItems(catalogItems);
+  await assertRefreshNotStopped({
+    startedAt,
+    report: previous,
+    offset: previous.items?.length || 0,
+    totalItems: catalogItems.length
+  });
 
   const selectedCompetitors = COMPETITORS.filter((item) => COMPETITOR_IDS.includes(item.id));
   await saveReportWithStatus(emptyReport(catalogItems.length, selectedCompetitors), {
     status: "running",
     startedAt,
+    mode: runMode,
     offset: 0,
     totalItems: catalogItems.length,
     message: "Lendo catalogos dos concorrentes"
   });
 
   const competitorCatalogs = await discoverCompetitorCatalogs(selectedCompetitors);
+  await assertRefreshNotStopped({
+    startedAt,
+    report: previous,
+    offset: 0,
+    totalItems: catalogItems.length
+  });
   const reviewOverrides = await getReviewOverrides().catch(() => null);
   const catalogSummary = Array.from(competitorCatalogs.entries())
     .map(([id, items]) => `${id}: ${items.length}`)
     .join(", ");
 
-  const resume = shouldResume(previous, catalogItems.length);
+  const resume = shouldResumeForMode(previous, catalogItems.length, runMode);
   let merged = resume ? previous : emptyReport(catalogItems.length, selectedCompetitors);
   const processedKeys = new Set((merged.items || []).map(reportItemKey).filter(Boolean));
   const itemsToProcess = resume
@@ -59,6 +76,7 @@ async function main() {
     await saveReportWithStatus(merged, {
       status: "running",
       startedAt,
+      mode: runMode,
       offset: startOffset,
       totalItems: catalogItems.length,
       items: merged.items.length,
@@ -76,6 +94,7 @@ async function main() {
     ownProductCache,
     reviewOverrides,
     selectedCompetitors,
+    runMode,
     startOffset,
     totalItems: catalogItems.length,
     previous: merged,
@@ -87,6 +106,7 @@ async function main() {
   await saveReportWithStatus(merged, {
     status: "ready",
     startedAt,
+    mode: runMode,
     finishedAt: new Date().toISOString(),
     offset: catalogItems.length,
     batchSize: BATCH_SIZE,
@@ -116,6 +136,20 @@ function shouldResume(previous, totalItems) {
     && previous.items.length < totalItems;
 }
 
+function shouldResumeForMode(previous, totalItems, runMode) {
+  if (runMode === "restart") return false;
+  if (runMode === "resume") return canResume(previous, totalItems);
+  return shouldResume(previous, totalItems);
+}
+
+function canResume(previous, totalItems) {
+  return previous
+    && previous.totalItems === totalItems
+    && Array.isArray(previous.items)
+    && previous.items.length > 0
+    && previous.items.length < totalItems;
+}
+
 async function buildReportWithRetry(context) {
   let lastError;
   for (let attempt = 1; attempt <= ITEM_RETRIES; attempt += 1) {
@@ -130,16 +164,24 @@ async function buildReportWithRetry(context) {
         reviewOverrides: context.reviewOverrides,
         onItem: async ({ items }) => {
           const offset = context.startOffset + items.length;
-          if (offset % SAVE_EVERY !== 0 && offset < context.totalItems) return;
           const partial = mergeReports(context.previous, {
             generatedAt: new Date().toISOString(),
             competitors: context.selectedCompetitors,
             totalItems: context.totalItems,
             items
           });
+          await assertRefreshNotStopped({
+            startedAt: context.startedAt,
+            report: partial,
+            offset,
+            totalItems: context.totalItems,
+            batchSize: BATCH_SIZE
+          });
+          if (offset % SAVE_EVERY !== 0 && offset < context.totalItems) return;
           await saveReportWithStatus(partial, {
             status: "running",
             startedAt: context.startedAt,
+            mode: context.runMode,
             offset,
             batchSize: BATCH_SIZE,
             totalItems: context.totalItems,
@@ -150,6 +192,7 @@ async function buildReportWithRetry(context) {
         }
       });
     } catch (error) {
+      if (error?.stopRequested) throw error;
       lastError = error;
       await saveReportWithStatus(await baseReport(), {
         status: "running",
@@ -163,6 +206,46 @@ async function buildReportWithRetry(context) {
     }
   }
   throw new Error(`Coleta parada durante a comparação. Causa: ${lastError?.message || lastError}`);
+}
+
+class StopRefreshError extends Error {
+  constructor(message) {
+    super(message);
+    this.stopRequested = true;
+  }
+}
+
+function requestedRunMode(control) {
+  if (control?.mode === "restart") return "restart";
+  if (control?.mode === "resume") return "resume";
+  return "auto";
+}
+
+async function assertRefreshNotStopped(context) {
+  const control = await getRefreshControl().catch(() => null);
+  if (!shouldStopForControl(control, context.startedAt)) return;
+  await saveReportWithStatus(context.report, {
+    status: "paused",
+    startedAt: context.startedAt,
+    pausedAt: new Date().toISOString(),
+    offset: context.offset,
+    batchSize: context.batchSize || BATCH_SIZE,
+    totalItems: context.totalItems,
+    items: context.report?.items?.length || 0,
+    message: control.action === "restart"
+      ? "Coleta pausada para reiniciar do zero."
+      : "Coleta pausada. O progresso foi salvo."
+  });
+  throw new StopRefreshError("Coleta pausada por solicitacao do painel");
+}
+
+function shouldStopForControl(control, startedAt) {
+  if (!control?.requestedAt || !startedAt) return false;
+  const requestedAt = new Date(control.requestedAt).getTime();
+  const workerStartedAt = new Date(startedAt).getTime();
+  if (!Number.isFinite(requestedAt) || !Number.isFinite(workerStartedAt)) return false;
+  if (requestedAt <= workerStartedAt) return false;
+  return control.action === "stop" || control.action === "restart";
 }
 
 function retryDelay(attempt) {
@@ -219,6 +302,7 @@ function normalizeReportUrl(value) {
 if (require.main === module) {
   main().catch(async (error) => {
     console.error(error);
+    if (error?.stopRequested) process.exit(0);
     await saveReportWithStatus(await baseReport(), {
       status: "error",
       failedAt: new Date().toISOString(),
