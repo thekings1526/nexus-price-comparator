@@ -71,11 +71,19 @@ h1 {
 
 .sync-card {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.055));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+}
+
+.sync-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
 }
 
 .sync-card .label {
@@ -97,6 +105,27 @@ h1 {
   font-weight: 650;
 }
 
+.sync-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  min-width: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e0f2fe;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.sync-actions {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto auto;
+  gap: 8px;
+}
+
 .run-button {
   min-height: 38px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -107,7 +136,24 @@ h1 {
   font-weight: 800;
 }
 
-.run-button:disabled {
+.control-button {
+  min-height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.control-button.danger {
+  border-color: rgba(254, 205, 202, 0.55);
+  color: #fecaca;
+}
+
+.run-button:disabled,
+.control-button:disabled {
   cursor: wait;
   opacity: 0.65;
 }
@@ -659,6 +705,57 @@ h1 {
   overflow: hidden;
 }
 
+.confirm-modal {
+  display: grid;
+  width: min(560px, 100%);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, 0.28);
+  overflow: hidden;
+}
+
+.confirm-modal-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.confirm-modal-body p {
+  margin: 0;
+  color: var(--slate);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.confirm-detail {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface-alt);
+}
+
+.confirm-detail span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.confirm-modal .control-button {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
 .review-modal-head {
   display: flex;
   justify-content: space-between;
@@ -997,6 +1094,7 @@ h1 {
   .topbar,
   .filters,
   .summary-grid,
+  .sync-actions,
   .price-row,
   .section-head,
   .board-header {
