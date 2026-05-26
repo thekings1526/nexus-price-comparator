@@ -766,6 +766,23 @@ async function getRefreshStatus() {
   return store.get("refresh-status", { type: "json", consistency: "strong" });
 }
 
+async function setRefreshControl(control) {
+  const store = await getBlobStore();
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    ...control
+  };
+  await store.setJSON("refresh-control", payload, {
+    metadata: { updatedAt: payload.updatedAt, action: payload.action || "" }
+  });
+  return payload;
+}
+
+async function getRefreshControl() {
+  const store = await getBlobStore();
+  return store.get("refresh-control", { type: "json", consistency: "strong" });
+}
+
 async function discoverOwnProducts(limit) {
   const found = new Map();
   for (const url of OWN_STORE.catalogUrls) {
@@ -2268,4 +2285,6 @@ module.exports.recordReviewDecision = recordReviewDecision;
 module.exports.getReviewCandidates = getReviewCandidates;
 module.exports.setRefreshStatus = setRefreshStatus;
 module.exports.getRefreshStatus = getRefreshStatus;
+module.exports.setRefreshControl = setRefreshControl;
+module.exports.getRefreshControl = getRefreshControl;
 module.exports.COMPETITORS = COMPETITORS;
