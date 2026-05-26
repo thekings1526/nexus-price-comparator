@@ -2084,6 +2084,8 @@ function isResidentEvil4GoldRemakeEquivalent(ownTokens, candidateTokens) {
 function isResidentEvilVillageEquivalent(ownTokens, candidateTokens) {
   const ownSet = comparableTokenSet(ownTokens);
   const candidateSet = comparableTokenSet(candidateTokens);
+  if (ownSet.has("gold") !== candidateSet.has("gold")) return false;
+  if (ownSet.has("7") !== candidateSet.has("7")) return false;
   return ownSet.has("resident")
     && ownSet.has("evil")
     && ownSet.has("village")
@@ -2161,6 +2163,7 @@ function isCallOfDutyModernWarfareEquivalent(ownTokens, candidateTokens) {
   const candidateSet = comparableTokenSet(candidateTokens);
   if (!ownSet.has("call") || !ownSet.has("duty") || !ownSet.has("modern") || !ownSet.has("warfare")) return false;
   if (!candidateSet.has("call") || !candidateSet.has("duty") || !candidateSet.has("modern") || !candidateSet.has("warfare")) return false;
+  if ((ownSet.has("remaster") || ownSet.has("remastered")) !== (candidateSet.has("remaster") || candidateSet.has("remastered"))) return false;
   const ownNumbers = titleNumberTokens(ownTokens);
   const candidateNumbers = titleNumberTokens(Array.from(candidateTokens));
   if (ownNumbers.has("2") || ownNumbers.has("3")) {
