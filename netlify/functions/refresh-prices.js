@@ -65,14 +65,17 @@ async function buildReport(options = {}) {
       };
     }
 
+    const itemReviewOverrides = options.refreshReviewOverridesPerItem
+      ? await getReviewOverrides().catch(() => reviewOverrides)
+      : reviewOverrides;
     const competitorMatches = await Promise.all(selectedCompetitors.map(async (competitor) => ({
       competitor,
-      result: await findCompetitorProductForReport(competitor, ownProduct, competitorCatalogs.get(competitor.id), parsedCompetitorCache, reviewOverrides).catch(() => ({ match: null, source: "error" }))
+      result: await findCompetitorProductForReport(competitor, ownProduct, competitorCatalogs.get(competitor.id), parsedCompetitorCache, itemReviewOverrides).catch(() => ({ match: null, source: "error" }))
     })));
 
     for (const { competitor, result } of competitorMatches) {
       const match = result?.match || null;
-      const review = buildReviewInsight(ownProduct, competitor.id, match, result, reviewOverrides);
+      const review = buildReviewInsight(ownProduct, competitor.id, match, result, itemReviewOverrides);
       if (!match) {
         for (const license of Object.keys(licenses)) {
           licenses[license].competitors[competitor.id] = { price: null, note: "Produto não encontrado com segurança" };
@@ -302,7 +305,6 @@ async function applyReviewDecisionToSavedReport(input, relatedInputs, now) {
   const report = await getSavedReport().catch(() => null);
   if (!report?.items?.length) return [];
   const status = await getRefreshStatus().catch(() => null);
-  if (status?.status === "running") return [];
 
   const parsedCache = new Map();
   const updates = [];
