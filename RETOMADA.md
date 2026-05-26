@@ -33,6 +33,14 @@ Regras adicionadas/fortalecidas: normalizacao de typos (`digitall`, `digita`, `k
 
 Validacao local: `npm.cmd run check` passou; bateria simulada aceitou os casos positivos acima e rejeitou RE4 2005 vs Remake, Modern Warfare 2 vs III, Spider-Man vs Miles Morales e Elden Ring vs Nightreign. A mesma familia de ajustes foi aplicada separadamente no comparador Mex, sem misturar dados, deploys ou ids.
 
+Publicacao/estado desta rodada:
+
+- Nexus Netlify deploy `6a1552a51be7dd70a9ecb36c`, estado `ready`.
+- Nexus GitHub commits `f9ec59d` (`netlify/functions/refresh-prices.js`) e `d5affd9` (`RETOMADA.md`).
+- Render Nexus ficou `live` no commit `d5affd9`.
+- A coleta Nexus foi reiniciada para usar as regras novas desde o inicio no job `crn-d87t66n7f7vs73dqjnpg-1779782516`; status observado apos o disparo: `running`, `offset 0/1039`, lendo catalogos.
+- A mesma familia de regras tambem foi publicada separadamente na Mex: Netlify `6a1552995acd3084d700c81c`, GitHub `e13f30f`/`8723db0`, Render `live`; coleta Mex reiniciada no job `crn-d8a5v3n7f7vs73cqt210-1779782607`.
+
 ## Decisao atual
 
 Nao vamos levar o site todo para outro lugar. A arquitetura escolhida e hibrida:
