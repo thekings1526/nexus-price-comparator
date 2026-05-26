@@ -1576,6 +1576,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasStandaloneDlcPrefix(candidateTitleSource, ownProduct.title)) return 0;
   if (hasDlcSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   const titleCoverageOk = titleCoverageAccepted(ownTitleTokens, candidateTitleTokens) || evidence.supportsTitleCoverage;
   if (!equivalentTitle && !titleCoverageOk) return 0;
@@ -1651,7 +1652,16 @@ function hasF1ManagerMismatch(ownTokens, candidateTokens) {
 function hasDlcSubtitleMismatch(ownTokens, candidateTokens) {
   const ownSet = comparableTokenSet(ownTokens);
   const candidateSet = comparableTokenSet(candidateTokens);
+  if (candidateSet.has("dlc") && !(ownSet.has("dlc") || ownSet.has("dlcs"))) return true;
+  if (candidateSet.has("dlcs") && candidateSet.has("pacote") && !(ownSet.has("dlc") || ownSet.has("dlcs"))) return true;
   return DLC_SUBTITLE_TOKEN_GROUPS.some((group) => hasDlcSubtitleGroup(ownSet, group) !== hasDlcSubtitleGroup(candidateSet, group));
+}
+
+function hasStandaloneDlcPrefix(candidateTitle, ownTitle) {
+  const candidate = normalize(candidateTitle);
+  const own = normalize(ownTitle);
+  if (/^dlcs?\b/.test(candidate) && !/^dlcs?\b/.test(own)) return true;
+  return false;
 }
 
 function hasDlcSubtitleGroup(tokens, group) {
@@ -2177,7 +2187,8 @@ const DLC_SUBTITLE_TOKEN_GROUPS = [
   [["phantom"], ["liberty"]],
   [["burning"], ["shores"]],
   [["shadow", "shadows"], ["erdtree"]],
-  [["vessel"], ["hatred"]]
+  [["vessel"], ["hatred"]],
+  [["caminhos", "separate"], ["distintos", "ways"]]
 ];
 
 const STRONG_EXTRA_EDITION_TOKENS = new Set([
