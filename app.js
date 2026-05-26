@@ -61,6 +61,9 @@ const state = {
     idle: false
   },
   refreshTimer: null,
+  refreshModal: {
+    mode: "resume"
+  },
   review: {
     modalContext: null,
     loading: false,
@@ -78,7 +81,10 @@ const elements = {
   syncStatus: document.querySelector("#syncStatus"),
   syncDetails: document.querySelector("#syncDetails"),
   syncProgress: document.querySelector("#syncProgress"),
+  syncBadge: document.querySelector("#syncBadge"),
   runWorkerButton: document.querySelector("#runWorkerButton"),
+  stopWorkerButton: document.querySelector("#stopWorkerButton"),
+  restartWorkerButton: document.querySelector("#restartWorkerButton"),
   resultsCount: document.querySelector("#resultsCount"),
   boardMeta: document.querySelector("#boardMeta"),
   searchInput: document.querySelector("#searchInput"),
@@ -90,7 +96,13 @@ const elements = {
   reviewModal: document.querySelector("#reviewModal"),
   reviewModalTitle: document.querySelector("#reviewModalTitle"),
   reviewModalBody: document.querySelector("#reviewModalBody"),
-  closeReviewModal: document.querySelector("#closeReviewModal")
+  closeReviewModal: document.querySelector("#closeReviewModal"),
+  refreshModal: document.querySelector("#refreshModal"),
+  refreshModalTitle: document.querySelector("#refreshModalTitle"),
+  refreshModalBody: document.querySelector("#refreshModalBody"),
+  closeRefreshModal: document.querySelector("#closeRefreshModal"),
+  cancelRefreshModal: document.querySelector("#cancelRefreshModal"),
+  confirmRefreshModal: document.querySelector("#confirmRefreshModal")
 };
 
 bindEvents();
@@ -152,7 +164,15 @@ function bindEvents() {
     render();
   });
 
-  elements.runWorkerButton.addEventListener("click", triggerWorkerRun);
+  elements.runWorkerButton.addEventListener("click", () => openRefreshModal(refreshDefaultMode()));
+  elements.stopWorkerButton.addEventListener("click", requestStopWorker);
+  elements.restartWorkerButton.addEventListener("click", () => openRefreshModal("restart"));
+  elements.closeRefreshModal.addEventListener("click", closeRefreshModal);
+  elements.cancelRefreshModal.addEventListener("click", closeRefreshModal);
+  elements.confirmRefreshModal.addEventListener("click", confirmRefreshModal);
+  elements.refreshModal.addEventListener("click", (event) => {
+    if (event.target === elements.refreshModal) closeRefreshModal();
+  });
   elements.rows.addEventListener("click", handleReviewAction);
   elements.rows.addEventListener("pointerover", handleReviewPrefetch);
   elements.closeReviewModal.addEventListener("click", closeReviewModal);
@@ -1002,6 +1022,165 @@ function renderSyncStatus() {
   }
   elements.syncStatus.textContent = "Aguardando primeira coleta";
   elements.syncDetails.textContent = "O worker diario vai preencher esta base automaticamente.";
+}
+
+function openRefreshModal(mode) {
+  state.refreshModal.mode = mode;
+  const isRestart = mode === "restart";
+  const isResume = mode === "resume" && canResumeCollection();
+  elements.refreshModalTitle.textContent = isRestart
+    ? "Reiniciar coleta do zero?"
+    : isResume ? "Continuar coleta salva?" : "Executar nova coleta?";
+  elements.refreshModalBody.innerHTML = `
+    <p>${isRestart
+      ? "Isso solicita uma coleta limpa no Render. Se houver uma coleta rodando, ela sera orientada a parar."
+      : isResume ? "O worker vai aproveitar os produtos ja salvos e continuar a partir do proximo item."
+        : "Isso inicia uma coleta no Render e atualiza o relatorio quando os lotes forem salvos."}</p>
+    <div class="confirm-detail">
+      <strong>Nexus Games</strong>
+      <span>Cada execucao usa o Render e pode gerar cobranca.</span>
+    </div>
+  `;
+  elements.confirmRefreshModal.textContent = isRestart
+    ? "Reiniciar coleta"
+    : isResume ? "Continuar coleta" : "Executar coleta";
+  elements.refreshModal.hidden = false;
+}
+
+function closeRefreshModal() {
+  elements.refreshModal.hidden = true;
+}
+
+async function confirmRefreshModal() {
+  closeRefreshModal();
+  await triggerWorkerRun(state.refreshModal.mode);
+}
+
+function refreshDefaultMode() {
+  return "resume";
+}
+
+function canResumeCollection() {
+  const status = state.remoteStatus;
+  const total = status?.totalItems || state.report.totalItems || 0;
+  const done = status?.offset ?? state.report.items?.length ?? 0;
+  return Boolean(status) && (status.status === "paused" || isStaleStatus(status)) && done > 0 && total > done;
+}
+
+async function triggerWorkerRun(mode = "resume") {
+  setRefreshButtonsBusy(true);
+  elements.syncStatus.textContent = mode === "restart" ? "Solicitando reinicio" : "Solicitando coleta";
+  elements.syncDetails.textContent = "Aguarde alguns segundos para o Render iniciar.";
+
+  try {
+    const response = await fetch("/api/trigger-refresh", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Nao consegui iniciar a coleta");
+    elements.syncStatus.textContent = mode === "restart" ? "Reinicio solicitado" : "Coleta iniciada";
+    elements.syncDetails.textContent = "O progresso aparece aqui enquanto o worker salva os lotes.";
+    setTimeout(loadSavedReport, 5000);
+  } catch (error) {
+    elements.syncStatus.textContent = "Falha ao iniciar coleta";
+    elements.syncDetails.textContent = error.message || "Tente novamente pelo painel do Render.";
+  } finally {
+    setRefreshButtonsBusy(false);
+  }
+}
+
+async function requestStopWorker() {
+  elements.stopWorkerButton.disabled = true;
+  elements.syncStatus.textContent = "Parada solicitada";
+  elements.syncDetails.textContent = "A coleta vai salvar o item atual e pausar.";
+  try {
+    const response = await fetch("/api/refresh-control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "stop" })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Nao consegui solicitar a parada");
+    setTimeout(loadSavedReport, 3000);
+  } catch (error) {
+    elements.syncStatus.textContent = "Falha ao parar coleta";
+    elements.syncDetails.textContent = error.message || "Tente novamente em alguns segundos.";
+  } finally {
+    elements.stopWorkerButton.disabled = false;
+  }
+}
+
+function setRefreshButtonsBusy(isBusy) {
+  elements.runWorkerButton.disabled = isBusy;
+  elements.restartWorkerButton.disabled = isBusy;
+  elements.confirmRefreshModal.disabled = isBusy;
+}
+
+function renderSyncStatus() {
+  const status = state.remoteStatus;
+  const total = status?.totalItems || state.report.totalItems || state.report.items?.length || 0;
+  const done = status?.offset ?? state.report.items?.length ?? 0;
+  const percent = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  elements.syncProgress.style.width = `${percent}%`;
+  renderRefreshControls(status);
+
+  if (status?.status === "queued") {
+    elements.syncStatus.textContent = "Coleta na fila";
+    elements.syncDetails.textContent = status.message || "O Render recebeu a solicitacao e deve iniciar em instantes.";
+    setSyncBadge("Fila");
+    return;
+  }
+  if (status?.status === "running") {
+    elements.syncStatus.textContent = isStaleStatus(status) ? "Coleta parcial salva" : "Coleta em andamento";
+    elements.syncDetails.textContent = `${done} de ${total} itens processados`;
+    setSyncBadge(`${percent}%`);
+    return;
+  }
+  if (status?.status === "stopping") {
+    elements.syncStatus.textContent = "Parando coleta";
+    elements.syncDetails.textContent = status.message || "Aguardando o worker salvar o item atual.";
+    setSyncBadge("Parando");
+    return;
+  }
+  if (status?.status === "paused") {
+    elements.syncStatus.textContent = "Coleta pausada";
+    elements.syncDetails.textContent = `${done} de ${total} itens salvos. Continue de onde parou ou reinicie do zero.`;
+    setSyncBadge("Pausada");
+    return;
+  }
+  if (status?.status === "error") {
+    elements.syncStatus.textContent = "Ultima atualizacao falhou";
+    elements.syncDetails.textContent = status.message || "Verifique o worker de coleta.";
+    setSyncBadge("Erro");
+    return;
+  }
+  if (state.report.items?.length) {
+    elements.syncStatus.textContent = "Dados atualizados";
+    elements.syncDetails.textContent = `${state.report.items.length} itens salvos - ${formatDate(state.report.generatedAt)}`;
+    elements.syncProgress.style.width = "100%";
+    setSyncBadge("Pronto");
+    return;
+  }
+  elements.syncStatus.textContent = "Aguardando primeira coleta";
+  elements.syncDetails.textContent = "O worker diario vai preencher esta base automaticamente.";
+  setSyncBadge("Vazio");
+}
+
+function renderRefreshControls(status) {
+  const statusKey = status?.status || "";
+  const running = statusKey === "queued" || statusKey === "running" || statusKey === "stopping";
+  const stopping = statusKey === "stopping";
+  elements.stopWorkerButton.hidden = !(statusKey === "queued" || statusKey === "running");
+  elements.restartWorkerButton.hidden = false;
+  elements.runWorkerButton.hidden = running && !stopping;
+  elements.runWorkerButton.textContent = canResumeCollection() ? "Continuar coleta" : "Executar coleta";
+  elements.restartWorkerButton.textContent = running ? "Reiniciar do zero" : "Reiniciar coleta";
+}
+
+function setSyncBadge(value) {
+  if (elements.syncBadge) elements.syncBadge.textContent = value;
 }
 
 function findCompetitor(id) {
