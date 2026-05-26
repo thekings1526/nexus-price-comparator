@@ -20,6 +20,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/refresh-control"
+  to = "/.netlify/functions/refresh-control"
+  status = 200
+
+[[redirects]]
   from = "/api/review-decision"
   to = "/.netlify/functions/review-decision"
   status = 200
