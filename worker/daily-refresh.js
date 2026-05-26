@@ -162,9 +162,10 @@ async function buildReportWithRetry(context) {
         parsedCompetitorCache: context.parsedCompetitorCache,
         ownProductCache: context.ownProductCache,
         reviewOverrides: context.reviewOverrides,
+        refreshReviewOverridesPerItem: true,
         onItem: async ({ items }) => {
           const offset = context.startOffset + items.length;
-          const partial = mergeReports(context.previous, {
+          let partial = mergeReports(context.previous, {
             generatedAt: new Date().toISOString(),
             competitors: context.selectedCompetitors,
             totalItems: context.totalItems,
@@ -178,6 +179,7 @@ async function buildReportWithRetry(context) {
             batchSize: BATCH_SIZE
           });
           if (offset % SAVE_EVERY !== 0 && offset < context.totalItems) return;
+          partial = await preserveManualReportEdits(partial, context.startedAt);
           await saveReportWithStatus(partial, {
             status: "running",
             startedAt: context.startedAt,
@@ -206,6 +208,38 @@ async function buildReportWithRetry(context) {
     }
   }
   throw new Error(`Coleta parada durante a comparação. Causa: ${lastError?.message || lastError}`);
+}
+
+async function preserveManualReportEdits(partial, startedAt) {
+  const latest = await getSavedReport().catch(() => null);
+  if (!latest?.items?.length || !partial?.items?.length) return partial;
+  const manualSinceStart = new Date(startedAt || 0).getTime();
+  const latestByKey = new Map((latest.items || []).map((item) => [reportItemKey(item), item]));
+  for (const item of partial.items || []) {
+    const latestItem = latestByKey.get(reportItemKey(item));
+    if (!latestItem) continue;
+    preserveManualCompetitorCells(item, latestItem, manualSinceStart);
+  }
+  return partial;
+}
+
+function preserveManualCompetitorCells(targetItem, latestItem, manualSinceStart) {
+  for (const [licenseKey, latestLicense] of Object.entries(latestItem.licenses || {})) {
+    const targetLicense = targetItem.licenses?.[licenseKey];
+    if (!targetLicense) continue;
+    targetLicense.competitors = targetLicense.competitors || {};
+    for (const [competitorId, latestCell] of Object.entries(latestLicense.competitors || {})) {
+      if (!isManualReviewCellSince(latestCell, manualSinceStart)) continue;
+      targetLicense.competitors[competitorId] = latestCell;
+    }
+  }
+}
+
+function isManualReviewCellSince(cell, manualSinceStart) {
+  const status = cell?.review?.status;
+  if (!["confirmed", "missing-today", "wrong"].includes(status)) return false;
+  const updatedAt = new Date(cell?.review?.updatedAt || 0).getTime();
+  return Number.isFinite(updatedAt) && updatedAt >= manualSinceStart;
 }
 
 class StopRefreshError extends Error {
