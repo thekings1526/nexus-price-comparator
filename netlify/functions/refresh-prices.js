@@ -1568,6 +1568,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (ownPlatform && candidateTitlePlatforms.size && !candidateTitlePlatforms.has(ownPlatform)) return 0;
   const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
   const equivalentTitle = hasEquivalentTitle(ownTitleTokens, candidateTitleTokens);
+  const evidence = productMatchEvidence(ownProduct, candidate, ownTitleTokens, candidateTitleTokens);
   const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
   const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
   if (!equivalentTitle && Array.from(ownTitleNumbers).some((token) => !candidateTitleNumbers.has(token) && !candidateTokens.has(token))) return 0;
@@ -1576,8 +1577,9 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasDlcSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
-  if (!titleCoverageAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
-  if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens)) return 0;
+  const titleCoverageOk = titleCoverageAccepted(ownTitleTokens, candidateTitleTokens) || evidence.supportsTitleCoverage;
+  if (!equivalentTitle && !titleCoverageOk) return 0;
+  if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens) && !evidence.supportsCoreAgreement) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasEditionMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasConflictingExtraEdition(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -1596,6 +1598,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   score += titleCoverageScore(ownTitleTokens, candidateTitleTokens);
   if (equivalentTitle) score += 10;
   score += editionCompatibilityScore(ownTitleTokens, candidateTitleTokens);
+  score += evidence.score;
   if (ownPlatform && candidatePlatforms.has(ownPlatform)) score += 5;
   if (imageLooksRelated(ownProduct.image, candidate.image)) score += 3;
   if (candidate.description && titleCoverageAccepted(ownTitleTokens, new Set(gameTokens(candidate.description)))) score += 2;
@@ -1791,6 +1794,61 @@ function imageLooksRelated(ownImage, candidateImage) {
   const candidate = imageKey(candidateImage);
   if (!own || !candidate) return false;
   return own === candidate || own.split("-").some((part) => part.length >= 6 && candidate.includes(part));
+}
+
+function productMatchEvidence(ownProduct, candidate, ownTitleTokens, candidateTitleTokens) {
+  const candidateDescriptionTokens = gameTokens(candidate.description || "");
+  const ownDescriptionTokens = gameTokens(ownProduct.description || "");
+  const candidateImageTokens = imageEvidenceTokens(candidate.image);
+  const ownImageTokens = imageEvidenceTokens(ownProduct.image);
+
+  const candidateDescription = evidenceCoverage(ownTitleTokens, candidateDescriptionTokens);
+  const ownDescription = evidenceCoverage(Array.from(candidateTitleTokens), ownDescriptionTokens);
+  const candidateImage = evidenceCoverage(ownTitleTokens, candidateImageTokens);
+  const ownImage = evidenceCoverage(Array.from(candidateTitleTokens), ownImageTokens);
+  const imageRelated = imageLooksRelated(ownProduct.image, candidate.image);
+  const imageScore = Math.max(candidateImage.score, ownImage.score, imageRelated ? 4 : 0);
+  const descriptionScore = Math.max(candidateDescription.score, ownDescription.score);
+  const score = Math.min(descriptionScore + imageScore, 8);
+  const titleCoverage = titleCoverageScore(ownTitleTokens, candidateTitleTokens);
+  const titleAnchor = distinctiveEvidenceTokens(ownTitleTokens)
+    .some((token) => hasComparableToken(token, comparableTokenSet(candidateTitleTokens)));
+
+  return {
+    score,
+    supportsTitleCoverage: (titleCoverage >= 5 && score >= 3)
+      || (titleCoverage >= 4 && descriptionScore >= 3 && imageScore >= 3)
+      || (titleAnchor && descriptionScore >= 3 && imageScore >= 3),
+    supportsCoreAgreement: score >= 6
+      && (candidateDescription.matches >= 2 || ownDescription.matches >= 2 || candidateImage.matches >= 2 || ownImage.matches >= 2)
+  };
+}
+
+function evidenceCoverage(sourceTokens, targetTokens) {
+  const source = distinctiveEvidenceTokens(sourceTokens);
+  if (!source.length || !targetTokens?.length) return { score: 0, matches: 0 };
+  const target = comparableTokenSet(targetTokens);
+  const matches = source.filter((token) => hasComparableToken(token, target));
+  if (!matches.length) return { score: 0, matches: 0 };
+  const ratio = matches.length / source.length;
+  const weighted = matches.reduce((total, token) => total + (token.length >= 5 ? 2 : 1), 0);
+  const score = matches.length >= 2 && ratio >= 0.45 ? Math.min(weighted, 5) : 0;
+  return { score, matches: matches.length };
+}
+
+function distinctiveEvidenceTokens(tokens) {
+  return uniqueBy(tokens, (token) => token)
+    .filter((token) => !STOP_WORDS.has(token))
+    .filter((token) => !LOOSE_TITLE_TOKENS.has(token))
+    .filter((token) => !EDITION_TOKENS.has(token))
+    .filter((token) => token.length >= 3 || /^\d{1,4}$/.test(ROMAN_NUMERALS[token] || token))
+    .filter((token) => !/^\d{5,}$/.test(token));
+}
+
+function imageEvidenceTokens(value) {
+  const key = imageKey(value);
+  if (!key) return [];
+  return gameTokens(key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, " "));
 }
 
 function buildSearchQueries(product) {
