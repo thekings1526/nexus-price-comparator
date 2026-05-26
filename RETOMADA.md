@@ -25,6 +25,29 @@ Os tokens reais necessarios para Netlify, GitHub e Render foram salvos localment
 
 Criar um comparador de precos para a Nexus Games Digital, comparando cada jogo com concorrentes escolhidos, separando licenca primaria e secundaria.
 
+## Registro de 26/05/2026 - bloqueio de edicoes automaticas diferentes
+
+Ao retomar o projeto, a coleta Nexus estava rodando no Render com relatorio parcial em `220/1039` e depois foi pausada com seguranca em `234/1039`. Na amostra parcial apareceram falsos positivos automaticos: `Call of Duty: Modern Warfare` aceitava `Modern Warfare Remastered` na Mex, `Resident Evil 8: Village` aceitava `Village Gold`, e o pacote `Resident Evil 7 Gold Edition & Village Gold Edition` aceitava paginas de `Village` simples.
+
+Correcoes aplicadas:
+
+- `netlify/functions/refresh-prices.js`: `isCallOfDutyModernWarfareEquivalent` agora exige que `remaster/remastered` exista dos dois lados; `isResidentEvilVillageEquivalent` agora bloqueia divergencia de `gold` e tambem bloqueia pacote com `7 + Village` contra pagina que nao tem `7`.
+- `app.js`: o painel passou a ignorar automaticamente, no calculo, pares nao confirmados manualmente com divergencia de edicao/pacote (`Gold`, `Ultimate`, `Deluxe`, `Bundle/Pacote/Pack`, `Remaster/Remastered`, etc.). Confirmacoes manuais continuam com prioridade.
+
+Validacoes:
+
+- `npm.cmd run check` passou.
+- Bateria simulada local: bloqueou `Modern Warfare` base vs `Remastered`, aceitou `Modern Warfare` correto, bloqueou `Village` base vs `Gold`, bloqueou `RE7 Gold + Village Gold` vs `Village` simples e aceitou `Village Gold` correto.
+- Publicado na Netlify no deploy `6a155b7c5acd309e7600c877`, estado `ready`, com estaticos + 8 funcoes.
+- Validacao publicada: `/app.js` contem `hasVersionMismatch` e `VERSION_TOKEN_GROUPS`; `/api/report` respondeu `200`; `/api/review-candidates` retornou score `0` para `Modern Warfare Remastered` quando o alvo e `Modern Warfare` base, score `0` para `Village Gold` quando o alvo e `Resident Evil 8: Village` base, e score `64` para `Village Gold` quando o alvo e `Resident Evil Village Gold Edition`.
+
+Publicacao/estado:
+
+- GitHub commit de codigo: `aa3d906` (`app.js` e `netlify/functions/refresh-prices.js`).
+- Render auto deploy `dep-d8alk43eo5us73bolr8g` ficou `live` no commit `aa3d906`.
+- Coleta antiga `crn-d87t66n7f7vs73dqjnpg-1779782516` foi pausada e terminou com sucesso apos salvar progresso (`234/1039`).
+- Nova coleta limpa disparada no Render: `crn-d87t66n7f7vs73dqjnpg-1779784851`, modo `restart`. Ultimo status observado: `running`, `offset 0/1039`, mensagem `Lendo catalogos dos concorrentes`, atualizado em `2026-05-26T08:41:38.547Z`.
+
 ## Registro de 26/05/2026 - aprendizado das correcoes manuais
 
 Depois de novas correcoes manuais do usuario na Mex e na Nexus, foram transformados em regra geral apenas padroes seguros de matching, mantendo a prioridade maxima das marcacoes manuais. Arquivo alterado na Nexus: `netlify/functions/refresh-prices.js`.
