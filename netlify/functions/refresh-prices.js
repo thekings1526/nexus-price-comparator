@@ -1593,6 +1593,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if ((ownTokens.includes("fc") || ownTokens.includes("fifa")) && !(candidateTokens.has("fc") || candidateTokens.has("fifa"))) return 0;
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasNeedForSpeedSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasStandaloneDlcPrefix(candidateTitleSource, ownProduct.title)) return 0;
   if (hasDlcSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   const titleCoverageOk = titleCoverageAccepted(ownTitleTokens, candidateTitleTokens) || evidence.supportsTitleCoverage;
@@ -1664,6 +1665,24 @@ function hasF1ManagerMismatch(ownTokens, candidateTokens) {
   const candidateSet = new Set(candidateTokens);
   if (!ownSet.has("f1") || !candidateSet.has("f1")) return false;
   return ownSet.has("manager") !== candidateSet.has("manager");
+}
+
+function hasNeedForSpeedSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!(ownSet.has("need") && ownSet.has("speed") && candidateSet.has("need") && candidateSet.has("speed"))) return false;
+  const subtitles = [
+    ["heat"],
+    ["unbound"],
+    ["payback"],
+    ["rivals"],
+    ["hot", "pursuit"],
+    ["most", "wanted"]
+  ];
+  return subtitles.some((group) => (
+    group.every((token) => ownSet.has(token))
+    && !group.every((token) => candidateSet.has(token))
+  ));
 }
 
 function hasDlcSubtitleMismatch(ownTokens, candidateTokens) {
@@ -2003,13 +2022,26 @@ function normalize(value) {
 }
 
 function tokenize(value) {
-  return normalize(value).split(/\s+/).filter(Boolean);
+  return normalize(normalizePlatformTokenSpacing(value)).split(/\s+/).filter(Boolean);
+}
+
+function normalizePlatformTokenSpacing(value) {
+  return String(value || "")
+    .replace(/\bplaystation\s*([345])\b/gi, "ps$1")
+    .replace(/\bps\s*([345])\b/gi, "ps$1");
 }
 
 function gameTokens(value) {
-  return expandAliases(tokenize(value))
+  return expandAliases(tokenize(value).map(normalizeCommonTitleTypo))
     .filter((token) => !STOP_WORDS.has(token))
     .filter((token) => token.length >= 2 || /^\d+$/.test(token));
+}
+
+function normalizeCommonTitleTypo(token) {
+  if (token === "camping") return "campaign";
+  if (token === "knigth") return "knight";
+  if (token.endsWith("tm") && token.length > 3) return token.slice(0, -2);
+  return token;
 }
 
 function expandAliases(tokens) {
