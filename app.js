@@ -738,9 +738,10 @@ function normalizeReviewUrl(value) {
   }
 }
 
-async function openReviewModal(context, query = "") {
-  const requestKey = reviewCandidateCacheKey(context, query);
-  state.review.modalContext = { ...context, query };
+async function openReviewModal(context, query) {
+  const effectiveQuery = query === undefined ? defaultReviewSearchQuery(context) : String(query || "").trim();
+  const requestKey = reviewCandidateCacheKey(context, effectiveQuery);
+  state.review.modalContext = { ...context, query: effectiveQuery };
   state.review.requestKey = requestKey;
   elements.reviewModal.hidden = false;
   elements.reviewModalTitle.textContent = `${findCompetitor(context.competitorId)?.name || context.competitorId}: corrigir vínculo`;
@@ -755,7 +756,7 @@ async function openReviewModal(context, query = "") {
   }
 
   try {
-    const payload = await fetchReviewCandidates(context, query);
+    const payload = await fetchReviewCandidates(context, effectiveQuery);
     if (state.review.requestKey !== requestKey) return;
     renderReviewCandidates(payload);
   } catch (error) {
@@ -866,6 +867,24 @@ function reviewCandidateCacheKey(context, query = "") {
   return `${context.ownUrl || ""}::${context.competitorId || ""}::${String(query || "").trim().toLowerCase()}`;
 }
 
+function defaultReviewSearchQuery(context) {
+  const own = buildOwnProductForReview(context?.ownUrl);
+  return cleanReviewSearchQuery(own.title);
+}
+
+function cleanReviewSearchQuery(title) {
+  const platformOrMedia = /^(?:ps[345]|playstation\s*[345]?|xbox(?:\s+one|\s+series(?:\s+[xs])?|\s+x\|s)?|m[ií]dia\s+digital|midia|digital|psn|licen[cç]a|prim[aá]ria|secund[aá]ria)$/i;
+  const segments = String(title || "")
+    .split(/\s+-\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !platformOrMedia.test(part));
+  return (segments.length ? segments.join(" ") : String(title || ""))
+    .replace(/\b(?:ps[345]|playstation\s*[345]?|xbox\s*(?:one|series\s*(?:x\|s|xs|x|s)?|x\|s|xs)?|m[ií]dia\s+digital|midia\s+digital|psn|licen[cç]a\s+digital|prim[aá]ria|secund[aá]ria)\b/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function handleReviewPrefetch(event) {
   const button = event.target.closest('[data-review-action="choose"]');
   if (!button || button.dataset.prefetched === "1") return;
@@ -876,7 +895,7 @@ function handleReviewPrefetch(event) {
     competitorId: button.dataset.competitorId,
     competitorUrl: button.dataset.competitorUrl || ""
   };
-  fetchReviewCandidates(context, "").catch(() => {});
+  fetchReviewCandidates(context, defaultReviewSearchQuery(context)).catch(() => {});
 }
 
 async function fetchReviewCandidates(context, query = "") {
