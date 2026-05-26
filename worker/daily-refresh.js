@@ -11,7 +11,7 @@ const {
 } = require("../netlify/functions/refresh-prices");
 
 const BATCH_SIZE = Math.max(Number(process.env.WORKER_BATCH_SIZE) || 1, 1);
-const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 1, 1);
+const ITEM_RETRIES = Math.max(Number(process.env.WORKER_ITEM_RETRIES) || 3, 1);
 const RESUME_ENABLED = process.env.WORKER_RESUME === "1";
 const SAVE_EVERY = Math.max(Number(process.env.WORKER_SAVE_EVERY) || 5, 1);
 const COMPETITOR_IDS = (process.env.WORKER_COMPETITORS || COMPETITORS.map((item) => item.id).join(","))
