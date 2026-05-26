@@ -983,10 +983,10 @@ function buildReviewInsight(ownProduct, competitorId, match, result, overrides) 
 
   const score = scoreCandidateWithLearning(match, ownProduct, competitorId, overrides);
   const reasons = [];
-  const ownPlatform = normalize(ownProduct.platform || "");
+  const ownPlatform = platformKey(ownProduct.platform || ownProduct.title || "");
   const candidateText = normalize(`${match.title || ""} ${match.description || ""} ${match.url || ""}`);
   const candidatePlatforms = platformsIn(candidateText);
-  if (ownPlatform && candidatePlatforms.has(ownPlatform)) reasons.push("Plataforma bate");
+  if (ownPlatform && candidateMatchesPlatform(candidatePlatforms, ownPlatform)) reasons.push("Plataforma bate");
   if (titleCoverageAccepted(gameTokens(ownProduct.title), new Set(gameTokens(match.title)))) reasons.push("Nome bate bem");
   if (hasAnyLicensePrice(match)) reasons.push("Preço de licença lido");
   if (imageLooksRelated(ownProduct.image, match.image)) reasons.push("Imagem parece relacionada");
@@ -1056,7 +1056,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
   const decision = getReviewDecision(overrides, ownProduct.url, competitor.id);
   const catalog = await discoverCompetitorCatalog(competitor);
   const manualQuery = cleanSearchQuery(query);
-  const ownPlatform = normalize(ownProduct.platform || "");
+  const ownPlatform = platformKey(ownProduct.platform || ownProduct.title || "");
   const normalizedLimit = Math.max(Number(limit) || 10, 1);
   const catalogPool = manualQuery ? catalog.filter((link) => queryCandidateScore(link, manualQuery) > 0) : catalog;
 
@@ -1078,7 +1078,7 @@ async function getReviewCandidates({ ownUrl, competitorId, limit = 10, query = "
     .filter((link) => !decision?.rejectedUrls?.[normalizeReviewUrl(link.url)])
     .map((link) => {
       const matchScore = scoreCandidateWithLearning(link, ownProduct, competitor.id, overrides, { preview: true }) - reviewPenalty(decision, link.url);
-      const platformBoost = manualQuery && ownPlatform && platformsIn(normalize(`${link.text || ""} ${link.title || ""} ${link.url || ""}`)).has(ownPlatform) ? 3 : 0;
+      const platformBoost = manualQuery && ownPlatform && candidateMatchesPlatform(platformsIn(`${link.text || ""} ${link.title || ""} ${link.url || ""}`), ownPlatform) ? 3 : 0;
       const searchScore = manualQuery ? queryCandidateScore(link, manualQuery) + platformBoost : 0;
       return { ...link, score: matchScore, searchScore };
     })
@@ -1572,9 +1572,9 @@ function isLikelyProductUrl(url, baseUrl, text) {
 function scoreCandidate(candidate, ownProduct, options = {}) {
   const candidateText = normalize(`${candidate.text || ""} ${candidate.title || ""} ${candidate.description || ""} ${candidate.url || ""}`);
   if (isRental(candidateText)) return 0;
-  const ownPlatform = normalize(ownProduct.platform || "");
+  const ownPlatform = platformKey(ownProduct.platform || ownProduct.title || "");
   const candidatePlatforms = platformsIn(candidateText);
-  if (ownPlatform && candidatePlatforms.size && !candidatePlatforms.has(ownPlatform)) return 0;
+  if (ownPlatform && candidatePlatforms.size && !candidateMatchesPlatform(candidatePlatforms, ownPlatform)) return 0;
 
   const ownTokens = gameTokens(`${ownProduct.title || ""} ${ownProduct.description || ""}`);
   const candidateTokens = new Set(gameTokens(candidateText));
@@ -1582,9 +1582,11 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   const ownTitleTokens = gameTokens(ownProduct.title);
   const candidateTitleSource = cleanText(`${candidate.text || ""} ${candidate.title || ""}`) || candidate.url || "";
   const candidateTitlePlatforms = platformsIn(candidateTitleSource);
-  if (ownPlatform && candidateTitlePlatforms.size && !candidateTitlePlatforms.has(ownPlatform)) return 0;
+  if (ownPlatform && candidateTitlePlatforms.size && !candidateMatchesPlatform(candidateTitlePlatforms, ownPlatform)) return 0;
   const candidateTitleTokens = new Set(gameTokens(candidateTitleSource));
-  const equivalentTitle = hasEquivalentTitle(ownTitleTokens, candidateTitleTokens);
+  const equivalentEdition = hasEquivalentEdition(ownTitleTokens, candidateTitleTokens);
+  const equivalentTitle = hasEquivalentTitle(ownTitleTokens, candidateTitleTokens)
+    || hasRawEquivalentTitle(ownProduct.title, candidateTitleSource);
   const evidence = productMatchEvidence(ownProduct, candidate, ownTitleTokens, candidateTitleTokens);
   const ownTitleNumbers = titleNumberTokens(ownTitleTokens);
   const candidateTitleNumbers = titleNumberTokens(Array.from(candidateTitleTokens));
@@ -1594,10 +1596,17 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (ownTokens.includes("gta") && ownTokens.includes("5") && candidateTokens.has("trilogy")) return 0;
   if (hasF1ManagerMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasNeedForSpeedSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasDragonBallFighterzEditionMismatch(ownProduct.title, candidateTitleSource)) return 0;
+  if (hasNarutoSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasResidentEvilSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasEldenRingSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasCrashNitroEditionMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasAssassinsCreedSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
+  if (hasOvercookedBundleMismatch(ownProduct.title, candidateTitleSource)) return 0;
   if (hasStandaloneDlcPrefix(candidateTitleSource, ownProduct.title)) return 0;
   if (hasDlcSubtitleMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
   const titleCoverageOk = titleCoverageAccepted(ownTitleTokens, candidateTitleTokens) || evidence.supportsTitleCoverage;
-  if (!equivalentTitle && !titleCoverageOk) return 0;
+  if (!equivalentEdition && !equivalentTitle && !titleCoverageOk) return 0;
   if (!coreTitleAgreementAccepted(ownTitleTokens, candidateTitleTokens) && !evidence.supportsCoreAgreement) return 0;
   if (!franchiseSubtitleCompatible(ownTitleTokens, candidateTitleTokens)) return 0;
   if (hasEditionMismatch(ownTitleTokens, candidateTitleTokens)) return 0;
@@ -1610,7 +1619,7 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
     tokenScore += token.length >= 4 ? 2 : 1;
     if (!/^\d+$/.test(token)) meaningfulMatches += 1;
   }
-  const minimumTokenScore = equivalentTitle ? 2 : options.preview ? (ownTitleTokens.length <= 2 ? 2 : 3) : (ownTitleTokens.length <= 2 ? 2 : 6);
+  const minimumTokenScore = equivalentEdition ? 4 : equivalentTitle ? 2 : options.preview ? (ownTitleTokens.length <= 2 ? 2 : 3) : (ownTitleTokens.length <= 2 ? 2 : 6);
   if (!meaningfulMatches || tokenScore < minimumTokenScore) return 0;
 
   let score = tokenScore;
@@ -1622,6 +1631,14 @@ function scoreCandidate(candidate, ownProduct, options = {}) {
   if (imageLooksRelated(ownProduct.image, candidate.image)) score += 3;
   if (candidate.description && titleCoverageAccepted(ownTitleTokens, new Set(gameTokens(candidate.description)))) score += 2;
   return score;
+}
+
+function candidateMatchesPlatform(candidatePlatforms, ownPlatform) {
+  if (!ownPlatform || !candidatePlatforms?.size) return true;
+  if (candidatePlatforms.has(ownPlatform)) return true;
+  if (ownPlatform === "xbox" && (candidatePlatforms.has("xbox one") || candidatePlatforms.has("xbox series"))) return true;
+  if ((ownPlatform === "xbox one" || ownPlatform === "xbox series") && candidatePlatforms.has("xbox")) return true;
+  return false;
 }
 
 function titleCoverageAccepted(ownTokens, candidateTokens) {
@@ -1645,6 +1662,11 @@ function coreTitleTokens(tokens) {
 function franchiseSubtitleCompatible(ownTokens, candidateTokens) {
   const ownSet = new Set(ownTokens);
   const candidateSet = comparableTokenSet(candidateTokens);
+  if (ownSet.has("minecraft") && candidateSet.has("minecraft")) {
+    const ownSpinOff = MINECRAFT_SPINOFF_TOKENS.some((token) => ownSet.has(token));
+    const candidateSpinOff = MINECRAFT_SPINOFF_TOKENS.some((token) => candidateSet.has(token));
+    if (ownSpinOff !== candidateSpinOff) return false;
+  }
   if (ownSet.has("call") && ownSet.has("duty") && candidateSet.has("call") && candidateSet.has("duty")) {
     const subtitle = ownTokens.filter((token) => !CALL_OF_DUTY_BASE_TOKENS.has(token) && !/^\d+$/.test(token));
     return subtitle.every((token) => hasComparableToken(token, candidateSet));
@@ -1685,7 +1707,92 @@ function hasNeedForSpeedSubtitleMismatch(ownTokens, candidateTokens) {
   ));
 }
 
+function hasDragonBallFighterzEditionMismatch(ownTitle, candidateTitle) {
+  const own = normalize(ownTitle);
+  const candidate = normalize(candidateTitle);
+  const sameGame = /\bdragon ball\b/.test(own)
+    && /\bfighter\s*z\b|\bfighterz\b/.test(own)
+    && /\bdragon ball\b/.test(candidate)
+    && /\bfighter\s*z\b|\bfighterz\b/.test(candidate);
+  if (!sameGame) return false;
+  return !/\bedi(?:cao|o)\s+fighterz\b|\bfighterz edition\b/.test(own)
+    && /\bedi(?:cao|o)\s+fighterz\b|\bfighterz edition\b/.test(candidate);
+}
+
+function hasNarutoSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("naruto") || !candidateSet.has("naruto")) return false;
+  const exclusiveGroups = [
+    ["road", "boruto"],
+    ["legacy"],
+    ["trilogy"],
+    ["connections"],
+    ["shinobi", "striker"]
+  ];
+  return exclusiveGroups.some((group) => group.every((token) => candidateSet.has(token))
+    && !group.every((token) => ownSet.has(token)));
+}
+
+function hasResidentEvilSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("resident") || !ownSet.has("evil") || !candidateSet.has("resident") || !candidateSet.has("evil")) return false;
+  const exclusiveGroups = [
+    ["village"],
+    ["triple", "pack"],
+    ["revelations"],
+    ["origins"]
+  ];
+  return exclusiveGroups.some((group) => group.every((token) => candidateSet.has(token))
+    && !group.every((token) => ownSet.has(token)));
+}
+
+function hasEldenRingSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("elden") || !ownSet.has("ring") || !candidateSet.has("elden") || !candidateSet.has("ring")) return false;
+  return candidateSet.has("nightreign") && !ownSet.has("nightreign");
+}
+
+function hasCrashNitroEditionMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("crash") || !ownSet.has("nitro") || !candidateSet.has("crash") || !candidateSet.has("nitro")) return false;
+  return (candidateSet.has("oxide") || candidateSet.has("nitros")) && !(ownSet.has("oxide") || ownSet.has("nitros"));
+}
+
+function hasAssassinsCreedSubtitleMismatch(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  const ownAssassin = ownSet.has("assassin") || ownSet.has("assassins");
+  const candidateAssassin = candidateSet.has("assassin") || candidateSet.has("assassins");
+  if (!ownAssassin || !candidateAssassin || !ownSet.has("creed") || !candidateSet.has("creed")) return false;
+  const groups = [
+    ["valhalla"],
+    ["mirage"],
+    ["origins"],
+    ["odyssey"],
+    ["syndicate"],
+    ["unity"],
+    ["black", "flag"],
+    ["ezio"],
+    ["3"],
+    ["4"]
+  ];
+  const ownGroups = groups.filter((group) => group.every((token) => ownSet.has(token)));
+  if (!ownGroups.length) return false;
+  return groups.some((group) => group.every((token) => candidateSet.has(token))
+    && !ownGroups.some((ownGroup) => ownGroup.length === group.length && ownGroup.every((token, index) => token === group[index])));
+}
+
+function hasOvercookedBundleMismatch(ownTitle, candidateTitle) {
+  if (!isOvercookedBundleTitle(ownTitle)) return false;
+  return !isOvercookedBundleTitle(candidateTitle);
+}
+
 function hasDlcSubtitleMismatch(ownTokens, candidateTokens) {
+  if (hasEquivalentEdition(ownTokens, candidateTokens)) return false;
   const ownSet = comparableTokenSet(ownTokens);
   const candidateSet = comparableTokenSet(candidateTokens);
   if (candidateSet.has("dlc") && !(ownSet.has("dlc") || ownSet.has("dlcs"))) return true;
@@ -1789,7 +1896,7 @@ function seasonNumberVariants(token) {
 }
 
 function editionCompatibilityScore(ownTokens, candidateTokens) {
-  if (hasEquivalentTitle(ownTokens, candidateTokens)) return 5;
+  if (hasEquivalentEdition(ownTokens, candidateTokens) || hasEquivalentTitle(ownTokens, candidateTokens)) return 5;
   const ownEditions = ownTokens.filter((token) => EDITION_TOKENS.has(token));
   const candidateEditions = Array.from(candidateTokens).filter((token) => EDITION_TOKENS.has(token));
   let score = 0;
@@ -1802,7 +1909,7 @@ function editionCompatibilityScore(ownTokens, candidateTokens) {
 }
 
 function hasEditionMismatch(ownTokens, candidateTokens) {
-  if (hasEquivalentTitle(ownTokens, candidateTokens)) return false;
+  if (hasEquivalentEdition(ownTokens, candidateTokens) || hasEquivalentTitle(ownTokens, candidateTokens)) return false;
   const ownSet = new Set(ownTokens);
   const candidateSet = new Set(candidateTokens);
   const ownEditions = Array.from(ownSet).filter((token) => STRICT_VERSION_TOKENS.has(token));
@@ -1813,14 +1920,62 @@ function hasEditionMismatch(ownTokens, candidateTokens) {
 }
 
 function hasConflictingExtraEdition(ownTokens, candidateTokens) {
-  if (hasEquivalentTitle(ownTokens, candidateTokens)) return false;
+  if (hasEquivalentEdition(ownTokens, candidateTokens) || hasEquivalentTitle(ownTokens, candidateTokens)) return false;
   const ownSet = new Set(ownTokens);
   return Array.from(candidateTokens)
     .some((token) => STRONG_EXTRA_EDITION_TOKENS.has(token) && !ownSet.has(token));
 }
 
+function hasEquivalentEdition(ownTokens, candidateTokens) {
+  return isCyberpunkUltimateEquivalent(ownTokens, candidateTokens)
+    || isNarutoUltimateNinjaStormEquivalent(ownTokens, candidateTokens)
+    || isUltimateBundleEquivalent(ownTokens, candidateTokens);
+}
+
 function hasEquivalentTitle(ownTokens, candidateTokens) {
-  return isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens);
+  return isGodOfWar2018Equivalent(ownTokens, candidateTokens)
+    || isLastOfUsRemasteredEquivalent(ownTokens, candidateTokens)
+    || isResidentEvil4GoldRemakeEquivalent(ownTokens, candidateTokens)
+    || isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens)
+    || isResidentEvilVillageEquivalent(ownTokens, candidateTokens)
+    || isGhostTsushimaDirectorEquivalent(ownTokens, candidateTokens)
+    || isResidentEvilTriplePackEquivalent(ownTokens, candidateTokens)
+    || isCrashBandicoot4Equivalent(ownTokens, candidateTokens);
+}
+
+function hasRawEquivalentTitle(ownTitle, candidateTitle) {
+  return isOvercookedBundleEquivalent(ownTitle, candidateTitle);
+}
+
+function isOvercookedBundleEquivalent(ownTitle, candidateTitle) {
+  return isOvercookedBundleTitle(ownTitle) && isOvercookedBundleTitle(candidateTitle);
+}
+
+function isOvercookedBundleTitle(title) {
+  const raw = String(title || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const normalized = normalize(title);
+  if (!/\bovercooked\b/.test(normalized)) return false;
+  return /\bovercooked\b[\s!._:-]*[+&][\s!._:-]*\bovercooked\b.*\b2\b/.test(raw)
+    || /\bovercooked\b.*\b1\b.*\b2\b/.test(normalized);
+}
+
+function isGodOfWar2018Equivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("god") || !ownSet.has("war") || !ownSet.has("4")) return false;
+  if (!candidateSet.has("god") || !candidateSet.has("war")) return false;
+  return !["ragnarok", "3", "ascension"].some((token) => candidateSet.has(token));
+}
+
+function isLastOfUsRemasteredEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("last") || !ownSet.has("us") || !ownSet.has("remastered")) return false;
+  if (!candidateSet.has("last") || !candidateSet.has("us") || !candidateSet.has("remastered")) return false;
+  return !candidateSet.has("2");
 }
 
 function isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens) {
@@ -1832,6 +1987,90 @@ function isResidentEvil4RemakeEquivalent(ownTokens, candidateTokens) {
   const blockedEditions = ["gold", "ultimate", "deluxe", "complete", "collection", "colecao", "trilogy", "bundle", "pack", "triple", "village", "revelations", "origins"];
   if (blockedEditions.some((token) => ownSet.has(token) || candidateSet.has(token))) return false;
   return ownSet.has("remake") || candidateSet.has("remake");
+}
+
+function isResidentEvil4GoldRemakeEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("resident") || !ownSet.has("evil") || !ownSet.has("4") || !ownSet.has("gold")) return false;
+  if (!candidateSet.has("resident") || !candidateSet.has("evil") || !candidateSet.has("4") || !candidateSet.has("gold")) return false;
+  if (ownSet.has("2005") || candidateSet.has("2005")) return false;
+  return ownSet.has("remake") || candidateSet.has("remake");
+}
+
+function isResidentEvilVillageEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  return ownSet.has("resident")
+    && ownSet.has("evil")
+    && ownSet.has("village")
+    && candidateSet.has("resident")
+    && candidateSet.has("evil")
+    && candidateSet.has("village");
+}
+
+function isGhostTsushimaDirectorEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("ghost") || !ownSet.has("tsushima") || !candidateSet.has("ghost") || !candidateSet.has("tsushima")) return false;
+  const ownDirector = ownSet.has("diretor") || (ownSet.has("versao") && ownSet.has("diretor")) || (ownSet.has("director") && ownSet.has("cut"));
+  const candidateDirector = (candidateSet.has("versao") && candidateSet.has("diretor")) || (candidateSet.has("director") && candidateSet.has("cut")) || (candidateSet.has("directors") && candidateSet.has("cut"));
+  return ownDirector && candidateDirector;
+}
+
+function isResidentEvilTriplePackEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  return ownSet.has("resident")
+    && ownSet.has("evil")
+    && ownSet.has("triple")
+    && ownSet.has("pack")
+    && candidateSet.has("resident")
+    && candidateSet.has("evil")
+    && candidateSet.has("triple")
+    && candidateSet.has("pack");
+}
+
+function isCrashBandicoot4Equivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("crash") || !ownSet.has("bandicoot") || !ownSet.has("4")) return false;
+  if (!candidateSet.has("crash") || !candidateSet.has("bandicoot") || !candidateSet.has("4")) return false;
+  return !["trilogy", "nitro", "racing"].some((token) => ownSet.has(token) || candidateSet.has(token));
+}
+
+function isCyberpunkUltimateEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("cyberpunk") || !ownSet.has("2077") || !candidateSet.has("cyberpunk") || !candidateSet.has("2077")) return false;
+  const ownUltimate = ownSet.has("ultimate");
+  const candidateUltimate = candidateSet.has("ultimate");
+  const ownPhantomBundle = ownSet.has("phantom") && ownSet.has("liberty") && (ownSet.has("bundle") || ownSet.has("pacote"));
+  const candidatePhantomBundle = candidateSet.has("phantom") && candidateSet.has("liberty") && (candidateSet.has("bundle") || candidateSet.has("pacote"));
+  return (ownUltimate && candidatePhantomBundle) || (candidateUltimate && ownPhantomBundle);
+}
+
+function isNarutoUltimateNinjaStormEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("naruto") || !ownSet.has("storm") || !candidateSet.has("naruto") || !candidateSet.has("storm")) return false;
+  if (!candidateSet.has("ultimate") || !candidateSet.has("ninja")) return false;
+  const ownNumbers = titleNumberTokens(ownTokens);
+  const candidateNumbers = titleNumberTokens(Array.from(candidateTokens));
+  if (Array.from(ownNumbers).some((token) => !candidateNumbers.has(token))) return false;
+  return !Array.from(candidateNumbers).some((token) => !ownNumbers.has(token));
+}
+
+function isUltimateBundleEquivalent(ownTokens, candidateTokens) {
+  const ownSet = comparableTokenSet(ownTokens);
+  const candidateSet = comparableTokenSet(candidateTokens);
+  if (!ownSet.has("ultimate") || !candidateSet.has("ultimate")) return false;
+  if (!(candidateSet.has("bundle") || candidateSet.has("pacote"))) return false;
+  if ((candidateSet.has("dlc") || candidateSet.has("dlcs")) && !candidateSet.has("jogo")) return false;
+  const extraEditions = Array.from(candidateSet)
+    .filter((token) => STRICT_VERSION_TOKENS.has(token) && !ownSet.has(token))
+    .filter((token) => !["bundle", "pacote", "pack"].includes(token));
+  return extraEditions.length === 0;
 }
 
 function imageLooksRelated(ownImage, candidateImage) {
@@ -2051,12 +2290,15 @@ function expandAliases(tokens) {
   if (/grand theft auto/.test(joined)) expanded.push("gta");
   if (/grand theft auto/.test(joined) && (tokens.includes("v") || tokens.includes("5"))) expanded.push("5");
   if (tokens.includes("fifa") || tokens.includes("fc")) expanded.push("fifa", "fc");
+  if (tokens.includes("assassin") || tokens.includes("assassins")) expanded.push("assassin", "assassins");
+  if (/dragon ball fighter\s*z/.test(joined) || /dragon ball fighterz/.test(joined)) expanded.push("fighterz");
+  if (tokens.includes("colection")) expanded.push("collection");
   if (tokens.includes("yotei") || tokens.includes("ytei") || tokens.includes("yte") || tokens.includes("yote")) expanded.push("yotei", "ytei", "yte", "yote");
   return uniqueBy(expanded, (token) => token);
 }
 
 function platformsIn(value) {
-  const text = normalize(value);
+  const text = normalize(normalizePlatformTokenSpacing(value));
   const platforms = new Set();
   if (/\bps5\b|playstation 5/.test(text)) platforms.add("ps5");
   if (/\bps4\b|playstation 4/.test(text)) platforms.add("ps4");
@@ -2068,7 +2310,7 @@ function platformsIn(value) {
 }
 
 function platformKey(value) {
-  const text = normalize(value);
+  const text = normalize(normalizePlatformTokenSpacing(value));
   if (/\bps5\b|playstation 5/.test(text)) return "ps5";
   if (/\bps4\b|playstation 4/.test(text)) return "ps4";
   if (/\bps3\b|playstation 3/.test(text)) return "ps3";
@@ -2170,7 +2412,9 @@ const STOP_WORDS = new Set([
   "edition",
   "edicao",
   "versao",
-  "psn"
+  "psn",
+  "portugues",
+  "ingles"
 ]);
 
 const REVIEW_FAMILY_IGNORED_TOKENS = new Set([
@@ -2215,6 +2459,8 @@ const EDITION_TOKENS = new Set([
   "bundle",
   "legendary",
   "definitive",
+  "definitiva",
+  "definitivo",
   "remake",
   "remaster",
   "remastered",
@@ -2231,6 +2477,7 @@ const EDITION_TOKENS = new Set([
 
 const CALL_OF_DUTY_BASE_TOKENS = new Set(["call", "duty", "cod"]);
 const DARK_PICTURES_BASE_TOKENS = new Set(["dark", "pictures", "anthology"]);
+const MINECRAFT_SPINOFF_TOKENS = ["dungeons", "legends"];
 
 const DLC_SUBTITLE_TOKEN_GROUPS = [
   [["phantom"], ["liberty"]],
@@ -2251,6 +2498,8 @@ const STRONG_EXTRA_EDITION_TOKENS = new Set([
   "bundle",
   "legendary",
   "definitive",
+  "definitiva",
+  "definitivo",
   "remake",
   "remaster",
   "remastered",
@@ -2275,6 +2524,8 @@ const STRICT_VERSION_TOKENS = new Set([
   "bundle",
   "legendary",
   "definitive",
+  "definitiva",
+  "definitivo",
   "remake",
   "remaster",
   "remastered",
