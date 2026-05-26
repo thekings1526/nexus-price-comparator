@@ -1308,30 +1308,74 @@ async function fetchProduct(url) {
 }
 
 async function fetchHtml(url) {
-  await waitForFetchSlot();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 14000);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
-        "upgrade-insecure-requests": "1",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  const retries = Math.max(Number(process.env.WORKER_FETCH_RETRIES || process.env.FETCH_RETRIES) || 4, 1);
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    await waitForFetchSlot(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 18000);
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: requestHeadersForUrl(url)
+      });
+      if (!response.ok) {
+        if (shouldRetryHttpStatus(response.status) && attempt < retries) {
+          await sleep(httpRetryDelayMs(response.status, attempt, url));
+          continue;
+        }
+        throw new Error(`HTTP ${response.status} em ${url}`);
       }
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status} em ${url}`);
-    return { url: response.url || url, html: await response.text() };
-  } finally {
-    clearTimeout(timeout);
+      return { url: response.url || url, html: await response.text() };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries || !shouldRetryFetchError(error)) throw error;
+      await sleep(httpRetryDelayMs(0, attempt, url));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError;
+}
+
+function requestHeadersForUrl(url) {
+  return {
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "cache-control": "no-cache",
+    "pragma": "no-cache",
+    "referer": refererForUrl(url),
+    "upgrade-insecure-requests": "1",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+  };
+}
+
+function refererForUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === new URL(OWN_STORE.baseUrl).hostname) return OWN_STORE.baseUrl;
+    return `${parsed.protocol}//${parsed.hostname}/`;
+  } catch {
+    return OWN_STORE.baseUrl;
   }
 }
 
-async function waitForFetchSlot() {
-  const delay = Math.max(Number(process.env.WORKER_REQUEST_DELAY_MS || process.env.REQUEST_DELAY_MS) || 0, 0);
+function shouldRetryHttpStatus(status) {
+  return status === 403 || status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function shouldRetryFetchError(error) {
+  return /aborted|fetch failed|network|timeout|econnreset|socket/i.test(String(error?.message || error));
+}
+
+function httpRetryDelayMs(status, attempt, url) {
+  const base = status === 403 || status === 429 || isOwnStoreUrl(url) ? 12000 : 3500;
+  const jitter = Math.floor(Math.random() * 2500);
+  return Math.min(60000, base * attempt) + jitter;
+}
+
+async function waitForFetchSlot(url) {
+  const delay = requestDelayForUrl(url);
   if (!delay) return;
   const jitter = Math.floor(Math.random() * Math.min(700, delay));
   const run = fetchQueue.catch(() => null).then(async () => {
@@ -1342,6 +1386,21 @@ async function waitForFetchSlot() {
   });
   fetchQueue = run;
   await run;
+}
+
+function requestDelayForUrl(url) {
+  const configured = Math.max(Number(process.env.WORKER_REQUEST_DELAY_MS || process.env.REQUEST_DELAY_MS) || 0, 0);
+  if (!isOwnStoreUrl(url)) return configured;
+  const ownMinimum = Math.max(Number(process.env.WORKER_OWN_STORE_DELAY_MS || process.env.OWN_STORE_DELAY_MS) || 1200, 0);
+  return Math.max(configured, ownMinimum);
+}
+
+function isOwnStoreUrl(url) {
+  try {
+    return new URL(url).hostname === new URL(OWN_STORE.baseUrl).hostname;
+  } catch {
+    return false;
+  }
 }
 
 function sleep(ms) {
