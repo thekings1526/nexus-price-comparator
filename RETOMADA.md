@@ -25,6 +25,14 @@ Os tokens reais necessarios para Netlify, GitHub e Render foram salvos localment
 
 Criar um comparador de precos para a Nexus Games Digital, comparando cada jogo com concorrentes escolhidos, separando licenca primaria e secundaria.
 
+## Registro de 26/05/2026 - aprendizado das correcoes manuais
+
+Depois de novas correcoes manuais do usuario na Mex e na Nexus, foram transformados em regra geral apenas padroes seguros de matching, mantendo a prioridade maxima das marcacoes manuais. Arquivo alterado na Nexus: `netlify/functions/refresh-prices.js`.
+
+Regras adicionadas/fortalecidas: normalizacao de typos (`digitall`, `digita`, `komba`, `mwii`, `mwiii`, `marvels`), separacao de slugs colados como `ps4midia`, remocao de carimbos de data/hora em slugs, equivalencias conservadoras para The Witcher 3/Wild Hunt, Call of Duty Modern Warfare 2019/II/III, PES/eFootball por ano, Little Nightmares 1+2, Rise of the Ronin/A Ascensao do Ronin, Resident Evil 7 Biohazard, Resident Evil Revelations 1+2 e Marvel Spider-Man base/GOTY. Tambem foi adicionada trava para impedir Spider-Man base/GOTY de aceitar Miles Morales ou Remastered.
+
+Validacao local: `npm.cmd run check` passou; bateria simulada aceitou os casos positivos acima e rejeitou RE4 2005 vs Remake, Modern Warfare 2 vs III, Spider-Man vs Miles Morales e Elden Ring vs Nightreign. A mesma familia de ajustes foi aplicada separadamente no comparador Mex, sem misturar dados, deploys ou ids.
+
 ## Decisao atual
 
 Nao vamos levar o site todo para outro lugar. A arquitetura escolhida e hibrida:
